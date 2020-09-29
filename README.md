@@ -18,11 +18,11 @@ bot is intended to run as `Generic` bot, owned by an administrator.
 usage
 -----
 
-`make install` will install a virtual environment into a folder called `bin`
-(do not forget to copy the bot's `zuliprc` file into `bin` after installation).
-`make run` lets you run the bot.
-`make debug` runs the bot with debug logging enabled
-`make uninstall` uninstalls everything under `bin` (except the `zuliprc`)
+- `make install` will install a virtual environment into a folder called `bin`.
+  (Do not forget to copy the bot's `zuliprc` file into `bin` after installation).
+- `make run` lets you run the bot.
+- `make debug` runs the bot with debug logging enabled.
+- `make uninstall` uninstalls everything under `bin` (except the `zuliprc`).
 
 You can also run the bot manually:
 ```
