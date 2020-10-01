@@ -41,7 +41,7 @@ Currently, I understand the following commands:
     post this help as private message to the requesting user
 - `source`
     post the link to the repository of my source code
-- `subscribe <stream_name1> to <stream_name2> [description]`
+- `subscribe "<stream_name1>" to "<stream_name2" "[description]"`
     subscribe all subscribers of `stream_name1` to `stream_name2`; if \
             `stream_name2` does not exist yet, create it with the (optional) \
             description
@@ -225,9 +225,10 @@ def subscribe(client: Client, message: Dict[str, Any],
 
     (from_stream, to_stream, description) = subscribe_capture_pattern.match(
         message['content']).groups()
+    if description is None:
+        description = ''
 
     subs: Dict[str, Any] = client.get_subscribers(stream = from_stream)
-    print(subs)
 
     if subs['result'] != 'success':
         return build_message(
@@ -239,7 +240,6 @@ def subscribe(client: Client, message: Dict[str, Any],
         principals = subs['subscribers']
     )
 
-    print(result)
     if result['result'] == 'success':
         return build_message(message, 'OK')
     else:
@@ -284,17 +284,17 @@ def main() -> None:
 
 
 file_regex: str = '\[[^\[\]]*\]\([^\(\)]*\)'
-stream_regex: str = '\w*'
+stream_regex: str = '[^"]*'
 
 file_capture_pattern: re.Pattern = re.compile(
     '\[[^\[\]]*\]\(([^\(\)]*)\)', re.I
 )
 subscribe_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*{}\s*to\s*{}.*'.format(stream_regex, stream_regex), re.I
+    '\s*subscribe\s*"{}"\s*to\s*"{}".*'.format(stream_regex, stream_regex), re.I
 )
 subscribe_capture_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*({})\s*to\s*({})\s*(.*)'.format(stream_regex, stream_regex),
-    re.I
+    '\s*subscribe\s*"({})"\s*to\s*"({})"\s*(?:"([^"]*)"|)\s*'\
+    .format(stream_regex, stream_regex), re.I
 )
 
 commands: List[Tuple[re.Pattern, Callable, Dict[str, Any]]] = [
