@@ -41,10 +41,12 @@ Currently, I understand the following commands:
     post this help as private message to the requesting user
 - `source`
     post the link to the repository of my source code
-- `subscribe "<stream_name1>" to "<stream_name2" "[description]"`
+- `subscribe <stream_name1> to <stream_name2 [description]`
     subscribe all subscribers of `stream_name1` to `stream_name2`; if \
             `stream_name2` does not exist yet, create it with the (optional) \
             description
+    The stream names may be of the form `#<stream_name>` or \
+            `#**<stream_name>**` (autocompleted stream name).
     [administrator rights needed]
 
 `*` *i.e. as private message if you wrote a private message to me or as stream \
@@ -284,17 +286,19 @@ def main() -> None:
 
 
 file_regex: str = '\[[^\[\]]*\]\([^\(\)]*\)'
-stream_regex: str = '[^"]*'
+opt_asterisks: str = '(?:\*\*|)'
+stream_regex: str = '[\w ]*'
 
 file_capture_pattern: re.Pattern = re.compile(
     '\[[^\[\]]*\]\(([^\(\)]*)\)', re.I
 )
 subscribe_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*"{}"\s*to\s*"{}".*'.format(stream_regex, stream_regex), re.I
+    '\s*subscribe\s+#{0}{1}{0}\s+to\s+#{0}{1}{0}.*'\
+    .format(opt_asterisks, stream_regex), re.I
 )
 subscribe_capture_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*"({})"\s*to\s*"({})"\s*(?:"([^"]*)"|)\s*'\
-    .format(stream_regex, stream_regex), re.I
+    '\s*subscribe\s+#{0}({1}){0}\s+to\s+#{0}({1}){0}\s*\!?(.*)?\s*'\
+    .format(opt_asterisks, stream_regex), re.I
 )
 
 commands: List[Tuple[re.Pattern, Callable, Dict[str, Any]]] = [
