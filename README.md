@@ -15,6 +15,14 @@ bot is intended to run as `Generic` bot, owned by an administrator.
 - [add a bot](https://zulipchat.com/help/add-a-bot-or-integration)
 - [about bots](https://zulipchat.com/help/bots-and-integrations)
 
+Note: If you like the command `subscribe` to work even if the destination stream
+does not yet exist (so that the bot needs to create the stream), the bot needs
+administrator rights.
+([Documentation](https://github.com/zulip/zulip/blob/master/docs/production/security-model.md)).
+In order to grant those rights, run
+`manage.py knight --for-real --permission=administer <bot_email>` in the appropriate
+directory of your zulip server installation.
+
 usage
 -----
 

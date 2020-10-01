@@ -20,6 +20,10 @@ It supports several commands which can be written to the bot using
 a private message or a message starting with @mentioning the bot.
 '''
 
+admin_err_msg: str = '''Hi {}!
+You need to be administrator of this organization in order to execute this \
+command.'''
+
 command_not_found_msg: str = '''Hi {}!
 Unfortunately, I currently cannot understand what you wrote to me.
 Try "help" to get a glimpse of what I am capable of. :-)'''
@@ -31,11 +35,17 @@ Did you try to hack me? ;-)'''
 give_help_msg: str = '''Hi {}!
 Currently, I understand the following commands:
 
-| command     | description
-| ----------- | -----------
-| **help**    | post this help as reply in the current context `*`
-| **help me** | post this help as private message to the requesting user
-| **source**  | post the link to the repository of my source code
+- `help`
+    post this help as reply in the current context `*`
+- `help me`
+    post this help as private message to the requesting user
+- `source`
+    post the link to the repository of my source code
+- `subscribe <stream_name1> to <stream_name2> [description]`
+    subscribe all subscribers of `stream_name1` to `stream_name2`; if \
+            `stream_name2` does not exist yet, create it with the (optional) \
+            description
+    [administrator rights needed]
 
 `*` *i.e. as private message if you wrote a private message to me or as stream \
 message otherwise*
@@ -43,7 +53,7 @@ message otherwise*
 Have a nice day! :-)
 '''
 
-subscribe_msg: str = '''Hi {}!
+subscribe_err_msg: str = '''Hi {}!
 There was an error, I could not execute your command successfully.
 Most likely, I do not have sufficient permissions in order to access one of \
 the streams.'''
@@ -208,20 +218,34 @@ def source(client: Client, message: Dict[str, Any], **kwargs) -> Dict[str, Any]:
 
 def subscribe(client: Client, message: Dict[str, Any],
               **kwargs) -> Dict[str, Any]:
-    (from_stream, to_stream) = subscribe_capture_pattern.match(
+    if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        return build_message(
+            message, admin_err_msg.format(message['sender_full_name'])
+        )
+
+    (from_stream, to_stream, description) = subscribe_capture_pattern.match(
         message['content']).groups()
 
-    subs: List[Dict[str, Any]] = client.get_subscribers(stream = from_stream)
+    subs: Dict[str, Any] = client.get_subscribers(stream = from_stream)
+    print(subs)
+
+    if subs['result'] != 'success':
+        return build_message(
+            message, subscribe_err_msg.format(message['sender_full_name'])
+        )
 
     result: Dict[str, Any] = client.add_subscriptions(
-        streams = [{'name': to_stream, 'description': 'my stream'}], # TODO
-        principals = subs
+        streams = [{'name': to_stream, 'description': description}],
+        principals = subs['subscribers']
     )
 
+    print(result)
     if result['result'] == 'success':
         return build_message(message, 'OK')
     else:
-        return build_message(message, subscribe_msg)
+        return build_message(
+            message, subscribe_err_msg.format(message['sender_full_name'])
+        )
 
 ############################
 ## END: command functions ##
@@ -266,10 +290,10 @@ file_capture_pattern: re.Pattern = re.compile(
     '\[[^\[\]]*\]\(([^\(\)]*)\)', re.I
 )
 subscribe_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*{}\s*to\s*{}\s*'.format(stream_regex, stream_regex), re.I
+    '\s*subscribe\s*{}\s*to\s*{}.*'.format(stream_regex, stream_regex), re.I
 )
 subscribe_capture_pattern: re.Pattern = re.compile(
-    '\s*subscribe\s*({})\s*to\s*({})\s*'.format(stream_regex, stream_regex),
+    '\s*subscribe\s*({})\s*to\s*({})\s*(.*)'.format(stream_regex, stream_regex),
     re.I
 )
 
