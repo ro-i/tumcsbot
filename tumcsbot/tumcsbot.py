@@ -135,6 +135,7 @@ def exception_occurred(client: Client, message: Dict[str, Any],
     ))
 
 
+# cf. https://github.com/zulip/python-zulip-api/issues/628
 def get_file(client: Client, file_path: str) -> str:
     url: str = client.get_server_settings()['realm_uri'] + file_path
 

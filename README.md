@@ -6,6 +6,7 @@ of the Department of Informatics of the Technichal University of Munich.
 
 **Note: This bot is currently under development and not yet production-ready!**
 
+
 setup
 -----
 
@@ -22,6 +23,7 @@ administrator rights
 In order to grant those rights, run
 `manage.py knight --for-real --permission=administer <bot_email>` in the appropriate
 directory of your zulip server installation.
+
 
 usage
 -----
@@ -50,7 +52,17 @@ optional arguments:
                         use LOGFILE for logging output
 ```
 
+
 usage in chat
 -------------
 Write the word `help` to the bot - as private message or using
 `@<tumcsbot-name> help`. It will tell you how you can use it. :-)
+
+
+notes
+-----
+
+My work on the possibility of accessing a file that the sender has added to a
+message using the "Attach files" function and my questions about this topic on
+chat.zulip.org have led to the corresponding issue on github:
+https://github.com/zulip/python-zulip-api/issues/628
