@@ -66,3 +66,7 @@ My work on the possibility of accessing a file that the sender has added to a
 message using the "Attach files" function and my questions about this topic on
 chat.zulip.org have led to the corresponding issue on github:
 https://github.com/zulip/python-zulip-api/issues/628
+
+The bot supports a dynamic plugin infrastructure and also generates the help
+message dynamically by using appropriate attributes every plugin has to
+provide.

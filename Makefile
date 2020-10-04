@@ -2,24 +2,27 @@
 # time-sheet - https://github.com/ro-i/time-sheet
 
 # location to install the virtual environment
-dest_dir = bin
+dest_dir = .
 
+# bot parameters
 args = 
 
-# default target
-.PHONY: install
-install:
-	@bash -- util.sh install '$(dest_dir)'
+# run bot; default target
+.PHONY: run
+run:
+	@bash -- util.sh run '$(dest_dir)' $(args)
 
 .PHONY: debug
 debug: args = --debug
 debug: run
 
-.PHONY: run
-run:
-	@bash -- util.sh run '$(dest_dir)' $(args)
+# remove virtual environment
+.PHONY: clean
+clean:
+	@bash -- util.sh clean '$(dest_dir)'
 
-.PHONY: uninstall
-uninstall:
-	@bash -- util.sh uninstall '$(dest_dir)'
+# install virtual environment
+.PHONY: virtualenv
+virtualenv:
+	@bash -- util.sh virtualenv '$(dest_dir)'
 

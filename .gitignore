@@ -1,2 +1,3 @@
-bin
-tumcsbot/__pycache__
+**/zuliprc
+**/__pycache__
+venv

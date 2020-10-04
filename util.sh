@@ -3,12 +3,12 @@
 set -e
 
 
-install_func () {
+virtualenv_func () {
 	# create virtual environment
-	python -m venv "${dest_dir}/tumcsbot_venv"
+	python -m venv "${dest_dir}/venv"
 
 	# enter virtual environment
-	source "${dest_dir}/tumcsbot_venv/bin/activate"
+	source "${dest_dir}/venv/bin/activate"
 
 	# install dependecies
 	pip install -r requirements.txt
@@ -16,28 +16,25 @@ install_func () {
 	# exit virtual environment
 	deactivate
 
-	# install bot
-	install -m 0700 -T ./tumcsbot/tumcsbot.py "${dest_dir}/tumcsbot"
-
 	printf '\n\n%s\n\n' '########################################'
-	echo "TODO for you: Please install the zuliprc for this bot in ${dest_dir}"
-	printf '\n%s\n\n\n' '########################################'
+	printf '%s' 'TODO for you: Please install the zuliprc for this bot.'
+	printf '\n\n%s\n\n\n' '########################################'
 }
 
 run_func () {
 	# enter virtual environment
-	source "${dest_dir}/tumcsbot_venv/bin/activate"
+	source "${dest_dir}/venv/bin/activate"
 
 	# execute bot
-	"${dest_dir}/tumcsbot" "$@" "${dest_dir}/zuliprc"
+	"${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc"
 
 	# exit virtual environment
 	deactivate
 }
 
-uninstall_func () {
-	# remove virtual environment and bot
-	rm -rf "${dest_dir}/tumcsbot_venv" "${dest_dir}/tumcsbot"
+clean_func () {
+	# remove virtual environment
+	rm -rf "${dest_dir}/venv"
 }
 
 
@@ -53,13 +50,13 @@ if ! [ -d "$dest_dir" ]; then
 fi
 
 case "$cmd" in
-	'install')
-		install_func "$@"
+	'clean')
+		clean_func "$@"
 		;;
 	'run')
 		run_func "$@"
 		;;
-	'uninstall')
-		uninstall_func "$@"
+	'virtualenv')
+		virtualenv_func "$@"
 		;;
 esac
