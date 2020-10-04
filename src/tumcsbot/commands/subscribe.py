@@ -46,7 +46,7 @@ class Command(lib.Command):
 
     def err(self, message: Dict[str, Any]) -> Dict[str, any]:
         return lib.build_message(
-            message, self.err_msg.format(message['sender_full_name'])
+            message, err_msg.format(message['sender_full_name'])
         )
 
     def func(
