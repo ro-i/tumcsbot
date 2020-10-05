@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -8,7 +8,7 @@ virtualenv_func () {
 	python -m venv "${dest_dir}/venv"
 
 	# enter virtual environment
-	source "${dest_dir}/venv/bin/activate"
+	. "${dest_dir}/venv/bin/activate"
 
 	# install dependecies
 	pip install -r requirements.txt
@@ -23,7 +23,7 @@ virtualenv_func () {
 
 run_func () {
 	# enter virtual environment
-	source "${dest_dir}/venv/bin/activate"
+	. "${dest_dir}/venv/bin/activate"
 
 	# execute bot
 	"${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc"
