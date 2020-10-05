@@ -75,5 +75,5 @@ provide.
 model
 -----
 
-![class diagram](./class_diagram.svg)
+![class diagram](./class_diagram.svg?)
 
