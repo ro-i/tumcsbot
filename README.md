@@ -76,3 +76,4 @@ model
 -----
 
 ![class diagram](./class_diagram.svg)
+
