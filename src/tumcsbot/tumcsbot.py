@@ -137,7 +137,7 @@ class TumCSBot:
             self.process_message(message)
         except Exception as e:
             logging.exception(e)
-            lib.Messages.exception(message)
+            self.client.send_message(lib.Messages.exception(message))
 
 
     def start(self) -> None:
