@@ -70,3 +70,9 @@ https://github.com/zulip/python-zulip-api/issues/628
 The bot supports a dynamic plugin infrastructure and also generates the help
 message dynamically by using appropriate attributes every plugin has to
 provide.
+
+model
+-----
+
+![class diagram](./class_diagram.svg)
+<img src="./class_diagram.svg">
