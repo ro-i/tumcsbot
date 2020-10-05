@@ -11,7 +11,7 @@ import re
 import typing
 
 from inspect import cleandoc
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from zulip import Client
 
 from . import lib
@@ -28,8 +28,8 @@ class TumCSBot:
         self,
         zuliprc: str,
         debug: bool = False,
-        logfile: str = None,
-        **kwargs
+        logfile: Optional[str] = None,
+        **kwargs: str
     ) -> None:
         if debug:
             logging.basicConfig(level = logging.DEBUG, filename = logfile)
@@ -52,7 +52,7 @@ class TumCSBot:
             self.send_response(lib.Response.greet(message))
             return
 
-        response: Tuple[str, Dict[str, Any]] = None
+        response: Optional[Tuple[str, Dict[str, Any]]] = None
 
         for command in self.commands:
             if command.is_responsible(message):

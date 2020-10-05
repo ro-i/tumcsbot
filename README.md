@@ -71,6 +71,12 @@ The bot supports a dynamic plugin infrastructure and also generates the help
 message dynamically by using appropriate attributes every plugin has to
 provide.
 
+[mypy](https://github.com/python/mypy) with `--strict` should not throw any
+error except this one:
+```
+src/tumcsbot/tumcsbot.py:90: error: Module has no attribute "Command"
+```
+
 
 model
 -----

@@ -6,7 +6,7 @@
 import re
 import typing
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -14,8 +14,8 @@ import tumcsbot.lib as lib
 
 class Command(lib.BaseCommand):
 
-    def __init__(self, **kwargs):
-        self._pattern: re.Pattern = re.compile(
+    def __init__(self, **kwargs: Any):
+        self._pattern: Pattern[str] = re.compile(
             '\s*cat\s*' + lib.Regex.FILE + '\s*', re.I
         )
 
@@ -23,7 +23,7 @@ class Command(lib.BaseCommand):
         self,
         client: Client,
         message: Dict[str, Any],
-        **kwargs
+        **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
         file_path: str = lib.parse_filenames(message['content'])[0]
 

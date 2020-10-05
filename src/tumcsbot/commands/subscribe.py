@@ -8,7 +8,7 @@ import re
 import typing
 
 from inspect import cleandoc
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -33,33 +33,38 @@ class Command(lib.Command):
         '''
     )
 
-    def __init__(self, **kwargs) -> None:
-        self._pattern: re.Pattern = re.compile(
+    def __init__(self, **kwargs: Any) -> None:
+        self._pattern: Pattern[str] = re.compile(
             '\s*subscribe\s+#{0}{1}{0}\s+to\s+#{0}{1}{0}.*'.format(
                 lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM
             ), re.I
         )
-        self._capture_pattern: re.Pattern = re.compile(
+        self._capture_pattern: Pattern[str] = re.compile(
             '\s*subscribe\s+#{0}({1}){0}\s+to\s+#{0}({1}){0}\s*\!?(.*)?\s*'
             .format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM), re.I
         )
 
-    def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, any]]:
+    def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         return lib.build_message(
-            message, err_msg.format(message['sender_full_name'])
+            message, type(self).err_msg.format(message['sender_full_name'])
         )
 
     def func(
         self,
         client: Client,
         message: Dict[str, Any],
-        **kwargs
+        **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 
-        (from_stream, to_stream, description) = self._capture_pattern.match(
-            message['content']).groups()
+        match: Optional[typing.Match[Any]] = self._capture_pattern.match(
+            message['content']
+        )
+        if match is None:
+            return lib.Response.command_not_found(message)
+
+        (from_stream, to_stream, description) = match.groups()
         if description is None:
             description = ''
 

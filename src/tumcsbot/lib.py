@@ -9,7 +9,7 @@ import urllib
 
 from abc import ABC, abstractmethod
 from inspect import cleandoc
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from zulip import Client
 
 
@@ -18,7 +18,9 @@ from zulip import Client
 ######################
 
 class Pattern:
-    FILE_CAPTURE: re.Pattern = re.compile('\[[^\[\]]*\]\(([^\(\)]*)\)', re.I)
+    FILE_CAPTURE: typing.Pattern[str] = re.compile(
+        '\[[^\[\]]*\]\(([^\(\)]*)\)', re.I
+    )
 
 
 class Regex:
@@ -40,7 +42,8 @@ class ResponseType:
 class BaseCommand(ABC):
 
     @abstractmethod
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
+        self._pattern: typing.Pattern[str]
         pass
 
     @abstractmethod
@@ -48,7 +51,7 @@ class BaseCommand(ABC):
         self,
         client: Client,
         message: Dict[str, Any],
-        **kwargs
+        **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
         '''
         Process request and return a tuple containing the type of the
@@ -57,10 +60,13 @@ class BaseCommand(ABC):
         pass
 
     def is_responsible(self, message: Dict[str, Any]) -> bool:
-        return self._pattern.fullmatch(message['content'])
+        return self._pattern.fullmatch(message['content']) is not None
 
 
 class Command(BaseCommand):
+    syntax: str
+    description: str
+
     def get_usage(self) -> Tuple[str, str]:
         '''
         Return a tuple containing:
@@ -99,8 +105,8 @@ class Helper:
         return cls.help.format(user, cls.command_docs)
 
     @classmethod
-    def extend_command_docs(cls, docs: List[Tuple[str]]) -> None:
-        processed: List[Tuple] = []
+    def extend_command_docs(cls, docs: List[Tuple[str, str]]) -> None:
+        processed: List[str] = []
 
         # sort by syntax string
         docs = sorted(docs, key = lambda tuple: tuple[0])
@@ -189,9 +195,9 @@ class Response:
 def build_message(
     message: Dict[str, Any],
     response: str,
-    type: str = None,
-    to: str = None,
-    subject: str = None
+    type: Optional[str] = None,
+    to: Optional[str] = None,
+    subject: Optional[str] = None
 ) -> Tuple[str, Dict[str, Any]]:
     if type is None:
         type = message['type']
@@ -237,8 +243,13 @@ def get_file(client: Client, file_path: str) -> str:
 
 
 def parse_filenames(s: str) -> List[str]:
-    return [
-        re.Pattern.FILE_CAPTURE.match(file).group(1)
-        for file in re.findall(Regex.FILE, s, re.I)
-    ]
+    files: List[str] = []
+
+    for file in re.findall(Regex.FILE, s, re.I):
+        match: Optional[typing.Match[Any]] = Pattern.FILE_CAPTURE.match(file)
+        if match is None:
+            continue
+        files.append(match.group(1))
+
+    return files
 
