@@ -8,7 +8,7 @@ import re
 import typing
 
 from inspect import cleandoc
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -44,7 +44,7 @@ class Command(lib.Command):
             .format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM), re.I
         )
 
-    def err(self, message: Dict[str, Any]) -> Dict[str, any]:
+    def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, any]]:
         return lib.build_message(
             message, err_msg.format(message['sender_full_name'])
         )
@@ -54,21 +54,18 @@ class Command(lib.Command):
         client: Client,
         message: Dict[str, Any],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
-            return lib.Messages.admin_err(message)
+            return lib.Response.admin_err(message)
 
         (from_stream, to_stream, description) = self._capture_pattern.match(
             message['content']).groups()
         if description is None:
             description = ''
 
-        print(from_stream, to_stream)
-
         subs: Dict[str, Any] = client.get_subscribers(stream = from_stream)
 
         if subs['result'] != 'success':
-            logging.debug(subs)
             return self.err(message)
 
         result: Dict[str, Any] = client.add_subscriptions(
@@ -77,8 +74,7 @@ class Command(lib.Command):
         )
 
         if result['result'] == 'success':
-            return lib.Messages.ok(message)
+            return lib.Response.ok(message)
         else:
-            logging.debug(result)
             return self.err(message)
 

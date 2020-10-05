@@ -49,10 +49,10 @@ class TumCSBot:
 
     def process_message(self, message: Dict[str, Any]) -> None:
         if message['content'] == '':
-            self.client.send_message(lib.Messages.greet(message))
+            self.send_response(lib.Response.greet(message))
             return
 
-        response: Dict[str, Any] = None
+        response: Tuple[str, Dict[str, Any]] = None
 
         for command in self.commands:
             if command.is_responsible(message):
@@ -60,9 +60,9 @@ class TumCSBot:
                 break
 
         if response is None:
-            response = lib.Messages.command_not_found(message)
+            response = lib.Response.command_not_found(message)
 
-        self.client.send_message(response)
+        self.send_response(response)
 
 
     # Pathes are relative here! All 'path' elements will be concatenated
@@ -137,7 +137,16 @@ class TumCSBot:
             self.process_message(message)
         except Exception as e:
             logging.exception(e)
-            self.client.send_message(lib.Messages.exception(message))
+            self.send_response(lib.Response.exception(message))
+
+
+    def send_response(self, response: Tuple[str, Dict[str, Any]]) -> None:
+        logging.debug('send_response: ' + str(response))
+
+        if response[0] == lib.ResponseType.MESSAGE:
+            self.client.send_message(response[1])
+        elif response[0] == lib.ResponseType.EMOJI:
+            self.client.add_reaction(response[1])
 
 
     def start(self) -> None:

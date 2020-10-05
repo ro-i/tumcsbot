@@ -6,7 +6,7 @@
 import re
 import typing
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -24,7 +24,7 @@ class Command(lib.BaseCommand):
         client: Client,
         message: Dict[str, Any],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
         file_path: str = lib.parse_filenames(message['content'])[0]
 
         content: str = lib.get_file(client, file_path)

@@ -6,7 +6,7 @@
 import re
 import typing
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -24,11 +24,11 @@ class Command(lib.Command):
         client: Client,
         message: Dict[str, Any],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
         return lib.build_message(
             message,
             lib.Helper.get_help(user = message['sender_full_name']),
             type = 'private',
             to = message['sender_email']
         )
-    
+

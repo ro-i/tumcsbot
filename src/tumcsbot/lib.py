@@ -17,14 +17,20 @@ from zulip import Client
 ## Begin: constants ##
 ######################
 
+class Pattern:
+    FILE_CAPTURE: re.Pattern = re.compile('\[[^\[\]]*\]\(([^\(\)]*)\)', re.I)
+
+
 class Regex:
     FILE: str = '\[[^\[\]]*\]\([^\(\)]*\)'
     OPT_ASTERISKS: str = '(?:\*\*|)'
     STREAM: str = '[\w ]*'
 
 
-class Pattern:
-    FILE_CAPTURE: re.Pattern = re.compile('\[[^\[\]]*\]\(([^\(\)]*)\)', re.I)
+class ResponseType:
+    MESSAGE: str = 'message'
+    EMOJI: str = 'emoji'
+    NONE: str = 'none'
 
 ######################
 ## End: constants ##
@@ -43,7 +49,11 @@ class BaseCommand(ABC):
         client: Client,
         message: Dict[str, Any],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
+        '''
+        Process request and return a tuple containing the type of the
+        response (cf. Response) and the response request itself.
+        '''
         pass
 
     def is_responsible(self, message: Dict[str, Any]) -> bool:
@@ -110,7 +120,7 @@ class Helper:
         cls.command_docs += '\n'.join(processed)
 
 
-class Messages:
+class Response:
     admin_err_msg: str = cleandoc(
         '''
         Hi {}!
@@ -133,37 +143,47 @@ class Messages:
         '''
     )
     greet_msg: str = 'Hi {}! :-)'
-    ok_msg: str = 'OK'
+    ok_emoji: str = 'ok'
 
     @classmethod
-    def admin_err(cls, message: Dict[str, Any]) -> Dict[str, Any]:
+    def admin_err(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
         return build_message(
             message,
             cls.admin_err_msg.format(message['sender_full_name'])
         )
 
     @classmethod
-    def command_not_found(cls, message: Dict[str, Any]) -> Dict[str, Any]:
+    def command_not_found(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
         return build_message(
             message,
             cls.command_not_found_msg.format(message['sender_full_name'])
         )
 
     @classmethod
-    def exception(cls, message: Dict[str, Any]) -> Dict[str, Any]:
+    def exception(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
         return build_message(
             message, cls.exception_msg.format(message['sender_full_name'])
         )
 
     @classmethod
-    def greet(cls, message: Dict[str, Any]) -> Dict[str, Any]:
+    def greet(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
         return build_message(
             message, cls.greet_msg.format(message['sender_full_name'])
         )
 
     @classmethod
-    def ok(cls, message: Dict[str, Any]) -> Dict[str, Any]:
-        return build_message(message, cls.ok_msg)
+    def ok(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
+        return build_reaction(message, cls.ok_emoji)
 
 
 def build_message(
@@ -172,7 +192,7 @@ def build_message(
     type: str = None,
     to: str = None,
     subject: str = None
-) -> Dict[str, Any]:
+) -> Tuple[str, Dict[str, Any]]:
     if type is None:
         type = message['type']
     private: bool = type == 'private'
@@ -183,11 +203,24 @@ def build_message(
     if subject is None:
         subject = message['subject'] if not private else ''
 
-    return dict(
-        type = type,
-        to = to,
-        subject = subject,
-        content = response
+    return (
+        ResponseType.MESSAGE,
+        dict(
+            type = type,
+            to = to,
+            subject = subject,
+            content = response
+        )
+    )
+
+
+def build_reaction(
+    message: Dict[str, Any],
+    emoji: str
+) -> Tuple[str, Dict[str, Any]]:
+    return (
+        ResponseType.EMOJI,
+        dict(message_id = message['id'], emoji_name = emoji)
     )
 
 
