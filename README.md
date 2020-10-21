@@ -28,11 +28,11 @@ directory of your zulip server installation.
 usage
 -----
 
-- `make install` will install a virtual environment into a folder called `bin`.
+- `make virtualenv` will install a virtual environment into a folder called
+  `venv` (default).
   (Do not forget to copy the bot's `zuliprc` file into `bin` after installation).
 - `make run` lets you run the bot.
 - `make debug` runs the bot with debug logging enabled.
-- `make uninstall` uninstalls everything under `bin` (except the `zuliprc`).
 
 You can also run the bot manually:
 ```
