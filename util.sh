@@ -5,13 +5,13 @@ set -e
 
 virtualenv_func () {
 	# create virtual environment
-	python -m venv "${dest_dir}/venv"
+	python3 -m venv "${dest_dir}/venv"
 
 	# enter virtual environment
 	. "${dest_dir}/venv/bin/activate"
 
 	# install dependecies
-	pip install -r requirements.txt
+	pip3 install -r requirements.txt
 
 	# exit virtual environment
 	deactivate
