@@ -26,10 +26,7 @@ run_func () {
 	. "${dest_dir}/venv/bin/activate"
 
 	# execute bot
-	"${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc"
-
-	# exit virtual environment
-	deactivate
+	exec "${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc"
 }
 
 clean_func () {
