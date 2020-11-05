@@ -21,7 +21,7 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
-            '\s*create_streams\s*.+', re.I, re.DOTALL
+            '\s*create_streams\s*.+', re.I | re.DOTALL
         )
 
     def func(
