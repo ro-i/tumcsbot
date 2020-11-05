@@ -30,6 +30,9 @@ class Command(lib.Command):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
+        if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+            return lib.Response.admin_err(message)
+
         failed: List[Tuple[str, str]] = []
 
         for line in message['content'].split('\n')[1:]:
