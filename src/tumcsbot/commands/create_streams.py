@@ -13,7 +13,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
-    syntax: str = 'create_streams\n<stream_name>,<stream_description>\n...'
+    syntax: str = '[BETA] create_streams\\n<stream_name>,<stream_description>\\n...'
     description: str = (
         'create a stream for every (stream,description)-tuple passed to this '
         'command (separated by newline)'
@@ -21,7 +21,7 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
-            '\s*create_streams\s*.+', re.I
+            '\s*create_streams\s*', re.I
         )
 
     def func(
