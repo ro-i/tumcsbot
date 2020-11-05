@@ -39,7 +39,10 @@ class Command(lib.Command):
             try:
                 (name, description) = line.split(',')
             except:
-                name = line.split(',')
+                name = line
+
+            if not name:
+                continue
 
             result: Dict[str, Any] = client.add_subscriptions(
                 streams = [{'name': name, 'description': description}]
