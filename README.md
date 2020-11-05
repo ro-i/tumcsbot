@@ -76,6 +76,10 @@ error except this one:
 ```
 src/tumcsbot/tumcsbot.py:90: error: Module has no attribute "Command"
 ```
+and this one (multiple times):
+```
+Cannot find implementation or library stub for module named 'zulip'
+```
 
 
 model

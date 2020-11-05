@@ -5,7 +5,8 @@
 
 import re
 import typing
-import urllib
+import urllib.parse
+import urllib.request
 
 from abc import ABC, abstractmethod
 from inspect import cleandoc
