@@ -6,7 +6,7 @@
 import re
 import typing
 
-from typing import Any, Dict, Pattern, Tuple
+from typing import Any, Dict, List, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -39,12 +39,17 @@ class Command(lib.Command):
             name: str
             description: str = ''
 
+            if line.count(',') > 1:
+                failed.append(line)
+                continue
+
             try:
                 (name, description) = line.split(',')
             except:
                 name = line
 
             if not name:
+                failed.append(line)
                 continue
 
             result: Dict[str, Any] = client.add_subscriptions(
@@ -52,16 +57,16 @@ class Command(lib.Command):
             )
 
             if result['result'] != 'success':
-                failed.append((name, description))
+                failed.append(line)
 
         if not failed:
             return lib.Response.ok(message)
 
         response: str = 'Failed to create the following streams:'
         for (name, description) in failed:
-            response += '\n{},{}'.format(name, description)
+            response += '\n' + line
         return lib.build_message(
             message,
-            lib.build_message(response),
+            response,
             type = 'private'
         )
