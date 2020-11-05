@@ -63,8 +63,9 @@ class Command(lib.Command):
             return lib.Response.ok(message)
 
         response: str = 'Failed to create the following streams:'
-        for (name, description) in failed:
+        for line in failed:
             response += '\n' + line
+
         return lib.build_message(
             message,
             response,
