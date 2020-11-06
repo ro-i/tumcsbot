@@ -55,7 +55,7 @@ class Command(lib.Command):
                 continue
 
             result: Dict[str, Any] = client.update_stream(
-                {'stream_id': id, 'new_name': name_new}
+                {'stream_id': id, 'new_name': '"{}"'.format(name_new)}
             )
 
             if result['result'] != 'success':
