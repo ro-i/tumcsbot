@@ -16,7 +16,8 @@ class Command(lib.Command):
     syntax: str = 'rename_streams\\n<stream_name_old>,<stream_name_new>\\n...'
     description: str = (
         'rename stream for every (stream_name_old,stream_name_new)-tuple '
-        'passed to this command (separated by newline)'
+        'passed to this command (separated by newline)\n'
+        '[administrator rights needed]'
     )
 
     def __init__(self, **kwargs: Any) -> None:

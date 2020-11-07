@@ -16,7 +16,8 @@ class Command(lib.Command):
     syntax: str = 'create_streams\\n<stream_name>,<stream_description>\\n...'
     description: str = (
         'create a public stream for every (stream,description)-tuple passed to this '
-        'command (separated by newline)'
+        'command (separated by newline)\n'
+        '[administrator rights needed]'
     )
 
     def __init__(self, **kwargs: Any) -> None:
