@@ -27,7 +27,7 @@ class Pattern:
 class Regex:
     FILE: str = '\[[^\[\]]*\]\([^\(\)]*\)'
     OPT_ASTERISKS: str = '(?:\*\*|)'
-    STREAM: str = '[\w ]*'
+    STREAM: str = '[^*#]*'
 
 
 class ResponseType:
