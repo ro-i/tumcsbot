@@ -16,8 +16,8 @@ import tumcsbot.lib as lib
 class Command(lib.Command):
     syntax: str = '[Experimental] move <stream>'
     description: str = (
-        'move the current topic to "stream" and notify all participants '
-        'of this topic by a private message\n'
+        'move the current topic to "stream" and notify the creator of this '
+        'topic by a private message\n'
         '**Note**: This works only if both streams are public!'
     )
     msg_template: str = (
