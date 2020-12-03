@@ -149,6 +149,11 @@ class Response:
         Did you try to hack me? ;-)
         '''
     )
+    error_msg: str = cleandoc(
+        '''
+        Sorry, {}, an error occurred while executing your request.
+        '''
+    )
     greet_msg: str = 'Hi {}! :-)'
     ok_emoji: str = 'ok'
 
@@ -168,6 +173,14 @@ class Response:
         return build_message(
             message,
             cls.command_not_found_msg.format(message['sender_full_name'])
+        )
+
+    @classmethod
+    def error(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
+        return build_message(
+            message, cls.error_msg.format(message['sender_full_name'])
         )
 
     @classmethod
