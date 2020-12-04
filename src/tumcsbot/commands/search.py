@@ -29,12 +29,16 @@ class Command(lib.Command):
             message: Dict[str, Any],
             **kwargs: Any
             ) -> Tuple[str, Dict[str, Any]]:
-        # get search string
-        search: str = self._capture_pattern.match(message['content']).group(1)
+        # get search string and quote it
+        search: str = urllib.parse.quote(
+            self._capture_pattern.match(message['content']).group(1), safe = ''
+        )
+        # fix strange behavior of Zulip which does not accept literal periods
+        search = search.replace('.', '%2E')
         # get host url (removing trailing 'api/')
         base_url: str = client.base_url[:-4]
         # build the full url
-        url: str = base_url + Command.path + urllib.parse.quote(search, safe = '')
+        url: str = base_url + Command.path + search
         # remove requesting message
         client.delete_message(message['id'])
         return lib.build_message(message, Command.msg_template.format(url))
