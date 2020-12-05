@@ -21,7 +21,7 @@ class Command(lib.Command):
         '**Note**: This works only if both streams are public!'
     )
     msg_template: str = (
-        'Hi, {}, I moved your topic "{}" to stream "{}" because I think that '
+        'Hi {}, I moved your topic "{}" to stream #**{}** because I think that '
         'it might be more appropriate there :smile:'
     )
 
@@ -36,11 +36,11 @@ class Command(lib.Command):
         )
 
     def func(
-            self,
-            client: Client,
-            message: Dict[str, Any],
-            **kwargs: Any
-            ) -> Tuple[str, Dict[str, Any]]:
+        self,
+        client: Client,
+        message: Dict[str, Any],
+        **kwargs: Any
+    ) -> Tuple[str, Dict[str, Any]]:
         request: Dict[str, Any]
         result: Dict[str, Any]
 

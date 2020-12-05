@@ -24,11 +24,11 @@ class Command(lib.Command):
         self._capture_pattern: Pattern[str] = re.compile('\s*search\s+(.*)', re.I)
 
     def func(
-            self,
-            client: Client,
-            message: Dict[str, Any],
-            **kwargs: Any
-            ) -> Tuple[str, Dict[str, Any]]:
+        self,
+        client: Client,
+        message: Dict[str, Any],
+        **kwargs: Any
+    ) -> Tuple[str, Dict[str, Any]]:
         # get search string and quote it
         search: str = urllib.parse.quote(
             self._capture_pattern.match(message['content']).group(1), safe = ''
