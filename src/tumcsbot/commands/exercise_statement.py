@@ -35,4 +35,6 @@ class Command(lib.Command):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
+        # remove requesting message
+        client.delete_message(message['id'])
         return lib.build_message(message, Command.msg_template)
