@@ -14,7 +14,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
-    name: str = 'syntax'
+    name: str = 'search'
     syntax: str = 'search <string>'
     description: str = ('get a url to a search for "string" in all public streams')
     msg_template: str = 'Hi, I hope that these search results may help you: {}'
