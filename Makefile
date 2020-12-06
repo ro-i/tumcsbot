@@ -10,7 +10,7 @@ args =
 # run bot; default target
 .PHONY: run
 run:
-	@bash -- util.sh run '$(dest_dir)' $(args)
+	@bash -- manage.sh run '$(dest_dir)' $(args)
 
 .PHONY: debug
 debug: args = --debug
@@ -19,10 +19,10 @@ debug: run
 # remove virtual environment
 .PHONY: clean
 clean:
-	@bash -- util.sh clean '$(dest_dir)'
+	@bash -- manage.sh clean '$(dest_dir)'
 
 # install virtual environment
 .PHONY: virtualenv
 virtualenv:
-	@bash -- util.sh virtualenv '$(dest_dir)'
+	@bash -- manage.sh virtualenv '$(dest_dir)'
 
