@@ -16,7 +16,7 @@ import tumcsbot.lib as lib
 
 class Command(lib.Command):
     name: str = 'subscribe'
-    syntax: str = 'subscribe\n<stream_name1>\n<stream_name2[\ndescription]'
+    syntax: str = 'subscribe\\n<stream_name1>\\n<stream_name2[\\ndescription]'
     description: str = (
         'subscribe all subscribers of `stream_name1` to `stream_name2`; if '
         '`stream_name2` does not exist yet, create it with the '
