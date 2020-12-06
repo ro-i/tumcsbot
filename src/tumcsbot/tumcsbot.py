@@ -23,10 +23,14 @@ class TumCSBot:
     It supports several commands which can be written to the bot using
     a private message or a message starting with @mentioning the bot.
     '''
+    _update_selfStats_sql = (
+        'update SelfStats set Count = Count + 1 where Command = "{}"'
+    )
 
     def __init__(
         self,
         zuliprc: str,
+        db_path: str,
         debug: bool = False,
         logfile: Optional[str] = None,
         **kwargs: str
@@ -36,8 +40,19 @@ class TumCSBot:
         else:
             logging.basicConfig(filename = logfile)
 
+        # init Zulip client
         self.client: Client = Client(config_file = zuliprc)
+        # init database handler
+        lib.DB.path = db_path
+        # get an own database connection
+        self._db = lib.DB()
+        # check for database table
+        self._db.checkout_table(
+            table = 'selfStats',
+            schema = '(Command varchar, Count integer, Since varchar)'
+        )
 
+        # register plugins
         self.commands: List[lib.Command] = self.get_all_commands_from_path(
             ['commands']
         )
@@ -57,6 +72,9 @@ class TumCSBot:
         for command in self.commands:
             if command.is_responsible(message):
                 response = command.func(self.client, message)
+                self._db.execute(
+                    TumCSBot._update_selfStats_sql.format(command.name)
+                )
                 break
 
         if response is None:
@@ -65,11 +83,15 @@ class TumCSBot:
         self.send_response(response)
 
 
-    # Pathes are relative here! All 'path' elements will be concatenated
-    # appropriately.
-    # Do not only receive the Command classes, but also their usage
-    # documentation string.
     def get_all_commands_from_path(self, path: List[str]) -> List[lib.Command]:
+        '''
+        Load all plugins (= commands) from "path".
+        Pathes are relative here. All 'path' elements will be
+        concatenated appropriately.
+        Do not only receive the Command classes, but also their usage
+        documentation string.
+        Prepare selfStats database entries.
+        '''
         commands: List[lib.Command] = []
         docs: List[Tuple[str, str]] = []
 
@@ -92,6 +114,13 @@ class TumCSBot:
             # collect usage information
             if lib.Command in inspect.getmro(type(command)):
                 docs.append(command.get_usage())
+            # check for corresponding row in database
+            self._db.checkout_row(
+                table = 'selfStats',
+                key_column = 'Command',
+                key = command.name,
+                default_values = '("{}", 0, date())'.format(command.name)
+            )
 
         lib.Helper.extend_command_docs(docs)
 

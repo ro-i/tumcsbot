@@ -19,6 +19,10 @@ def main() -> None:
         help = 'zuliprc file containing the bot\'s configuration'
     )
     argument_parser.add_argument(
+        'db_path', metavar = 'DB_PATH', nargs = 1,
+        help = 'path to bot\'s database'
+    )
+    argument_parser.add_argument(
         '-d', '--debug', action = 'store_true',
         help = 'print debug information on the console'
     )
@@ -29,6 +33,7 @@ def main() -> None:
 
     bot: TumCSBot = TumCSBot(
         zuliprc = args.zuliprc[0],
+        db_path = args.db_path[0],
         debug = args.debug,
         logfile = args.logfile
     )

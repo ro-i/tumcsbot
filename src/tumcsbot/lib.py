@@ -4,6 +4,7 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
+import sqlite3 as sqlite
 import typing
 import urllib.parse
 import urllib.request
@@ -65,6 +66,7 @@ class BaseCommand(ABC):
 
 
 class Command(BaseCommand):
+    name: str
     syntax: str
     description: str
 
@@ -81,6 +83,71 @@ class Command(BaseCommand):
         The syntax string is formatted as code (using backticks) automatically.
         '''
         return (type(self).syntax, type(self).description)
+
+
+class DB:
+    '''
+    Simple wrapper class for conveniently accessing a sqlite database.
+    Currently not threadsafe.
+    '''
+    path: str = None
+
+    def __init__(self) -> None:
+        if not DB.path:
+            raise ValueError('no path to database given')
+        self.connection = sqlite.connect(DB.path)
+        self.cursor = self.connection.cursor()
+
+    def checkout_table(self, table: str, schema: str) -> None:
+        '''
+        Create table if it does not already exist.
+        Arguments:
+            table   name of the table
+            schema  schema of the table in the form of
+                      '(Name Type, ...)' --> valid SQL!
+        '''
+        create: str = 'create table {} {};'.format(table, schema)
+        result: sqlite.Cursor = self.execute(
+            ('select * from sqlite_schema where type = "table" and '
+             'name = "{}";'.format(table))
+        )
+        if not result:
+            self.execute(create)
+
+    def checkout_row(
+        self,
+        table: str,
+        key_column: str,
+        key: str,
+        default_values: str
+    ) -> None:
+        '''
+        Create row in table if it does not already exist.
+        Arguments:
+            table           name of the table
+            key_column      name of the column of the primary key
+            key             key to identify the row
+            default_values  default value to insert if row does not yet
+                            exist
+                            - must be in the form of
+                              '(Integer, "String", ...)' --> valid SQL!
+        '''
+        result = self.execute(
+            'select * from {} where {} = "{}";'.format(table, key_column, key)
+        )
+        if not result:
+            self.execute(
+                'insert into {} values {}'.format(table, default_values)
+            )
+
+    def execute(self, command: str) -> List[Tuple]:
+        '''
+        Execute sql command, save the new database state and return the
+        result of the command.
+        '''
+        result: sqlite.Cursor = self.cursor.execute(command)
+        self.connection.commit()
+        return result.fetchall()
 
 
 class Helper:

@@ -3,6 +3,32 @@
 set -e
 
 
+clean_func () {
+	# remove virtual environment
+	rm -rf "${dest_dir}/venv"
+}
+
+
+database_func () {
+	db="${dest_dir}/tumcsbot.db"
+
+	if [ -e "$db" ]; then
+		echo "Database ${db} already exists."
+		return
+	fi
+
+	touch "$db"
+	chmod 0600 "$db"
+}
+
+run_func () {
+	# enter virtual environment
+	. "${dest_dir}/venv/bin/activate"
+
+	# execute bot
+	exec "${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc" "${dest_dir}/tumcsbot.db"
+}
+
 virtualenv_func () {
 	# create virtual environment
 	python3 -m venv "${dest_dir}/venv"
@@ -21,19 +47,6 @@ virtualenv_func () {
 	printf '\n\n%s\n\n\n' '########################################'
 }
 
-run_func () {
-	# enter virtual environment
-	. "${dest_dir}/venv/bin/activate"
-
-	# execute bot
-	exec "${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc"
-}
-
-clean_func () {
-	# remove virtual environment
-	rm -rf "${dest_dir}/venv"
-}
-
 
 cmd="$1"
 dest_dir="$2"
@@ -49,6 +62,9 @@ fi
 case "$cmd" in
 	'clean')
 		clean_func "$@"
+		;;
+	'database')
+		database_func "$@"
 		;;
 	'run')
 		run_func "$@"
