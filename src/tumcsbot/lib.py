@@ -108,7 +108,7 @@ class DB:
         '''
         create: str = 'create table {} {};'.format(table, schema)
         result: sqlite.Cursor = self.execute(
-            ('select * from sqlite_schema where type = "table" and '
+            ('select * from sqlite_master where type = "table" and '
              'name = "{}";'.format(table))
         )
         if not result:
