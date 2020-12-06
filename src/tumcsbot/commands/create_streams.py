@@ -13,6 +13,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'create_streams'
     syntax: str = 'create_streams\\n<stream_name>,<stream_description>\\n...'
     description: str = (
         'create a public stream for every (stream,description)-tuple passed to this '

@@ -13,6 +13,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'help'
     syntax: str = 'help'
     description: str = 'post this help as private message'
 

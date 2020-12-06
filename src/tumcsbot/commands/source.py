@@ -13,6 +13,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'source'
     syntax: str = 'source'
     description: str = 'post the link to the repository of my source code'
 

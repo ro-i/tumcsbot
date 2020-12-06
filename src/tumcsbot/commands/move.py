@@ -14,6 +14,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'move'
     syntax: str = 'move <destination stream>'
     description: str = (
         'move the current topic to `destination stream` and notify the creator '

@@ -13,6 +13,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'rename_streams'
     syntax: str = 'rename_streams\\n<stream_name_old>,<stream_name_new>\\n...'
     description: str = (
         'rename stream for every (stream_name_old,stream_name_new)-tuple '

@@ -15,6 +15,7 @@ import tumcsbot.lib as lib
 
 
 class Command(lib.Command):
+    name: str = 'subscribe'
     syntax: str = 'subscribe <stream_name1> to <stream_name2 ![description]'
     description: str = (
         'subscribe all subscribers of `stream_name1` to `stream_name2`; if '
