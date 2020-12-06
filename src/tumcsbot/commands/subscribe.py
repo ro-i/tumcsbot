@@ -16,7 +16,7 @@ import tumcsbot.lib as lib
 
 class Command(lib.Command):
     name: str = 'subscribe'
-    syntax: str = 'subscribe <stream_name1> to <stream_name2 ![description]'
+    syntax: str = 'subscribe\n<stream_name1>\n<stream_name2[\ndescription]'
     description: str = (
         'subscribe all subscribers of `stream_name1` to `stream_name2`; if '
         '`stream_name2` does not exist yet, create it with the '
@@ -36,13 +36,9 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
-            '\s*subscribe\s+#{0}{1}{0}\s+to\s+#{0}{1}{0}.*'.format(
+            'subscribe\n#{0}({1}){0}\n#{0}({1}){0}(\n.+)?'.format(
                 lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM
             ), re.I
-        )
-        self._capture_pattern: Pattern[str] = re.compile(
-            '\s*subscribe\s+#{0}({1}){0}\s+to\s+#{0}({1}){0}\s*\!?(.*)?\s*'
-            .format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM), re.I
         )
 
     def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
@@ -59,7 +55,7 @@ class Command(lib.Command):
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 
-        match: Optional[typing.Match[Any]] = self._capture_pattern.match(
+        match: Optional[typing.Match[Any]] = self._pattern.match(
             message['content']
         )
         if match is None:

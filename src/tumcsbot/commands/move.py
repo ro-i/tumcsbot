@@ -28,11 +28,7 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(
-            '\s*move\s+#{0}{1}{0}\s*'.format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM),
-            re.I
-        )
-        self._capture_pattern: Pattern[str] = re.compile(
-            '\s*move\s+#{0}({1}){0}\s*'.format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM),
+            'move\s+#{0}({1}){0}\s*'.format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM),
             re.I
         )
 
@@ -51,7 +47,7 @@ class Command(lib.Command):
         client.delete_message(message['id'])
 
         # get destination stream id
-        dest_stream: str = self._capture_pattern.match(message['content']).group(1)
+        dest_stream: str = self._pattern.match(message['content']).group(1)
         result = client.get_stream_id(dest_stream)
         if result['result'] != 'success':
             return lib.Response.error(message)

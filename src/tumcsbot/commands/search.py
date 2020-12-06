@@ -21,8 +21,7 @@ class Command(lib.Command):
     path: str = '#narrow/streams/public/search/'
 
     def __init__(self, **kwargs: Any):
-        self._pattern: Pattern[str] = re.compile('\s*search\s+\S+.*', re.I)
-        self._capture_pattern: Pattern[str] = re.compile('\s*search\s+(.*)', re.I)
+        self._pattern: Pattern[str] = re.compile('\s*search\s+(\S+.*)', re.I)
 
     def func(
         self,
@@ -32,7 +31,7 @@ class Command(lib.Command):
     ) -> Tuple[str, Dict[str, Any]]:
         # get search string and quote it
         search: str = urllib.parse.quote(
-            self._capture_pattern.match(message['content']).group(1), safe = ''
+            self._pattern.match(message['content']).group(1), safe = ''
         )
         # fix strange behavior of Zulip which does not accept literal periods
         search = search.replace('.', '%2E')
