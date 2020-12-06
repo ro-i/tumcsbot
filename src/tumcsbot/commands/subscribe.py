@@ -36,7 +36,7 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
-            'subscribe\n#{0}({1}){0}\n#{0}({1}){0}(\n.+)?'.format(
+            '\s*subscribe\n#{0}({1}){0}\n#{0}({1}){0}(\n.+)?'.format(
                 lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM
             ), re.I
         )

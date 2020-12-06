@@ -28,7 +28,7 @@ class Command(lib.Command):
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(
-            'move\s+#{0}({1}){0}\s*'.format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM),
+            '\s*move\s+#{0}({1}){0}\s*'.format(lib.Regex.OPT_ASTERISKS, lib.Regex.STREAM),
             re.I
         )
 
