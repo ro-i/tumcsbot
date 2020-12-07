@@ -28,9 +28,8 @@ directory of your zulip server installation.
 usage
 -----
 
-- `make virtualenv` will install a virtual environment into a folder called
-  `venv` (default).
-  (Do not forget to copy the bot's `zuliprc` file into `bin` after installation).
+- `make init` will create the database `tumcsbot.db` and install a virtual
+  environment into `venv`.
 - `make run` lets you run the bot.
 - `make debug` runs the bot with debug logging enabled.
 
@@ -71,15 +70,8 @@ The bot supports a dynamic plugin infrastructure and also generates the help
 message dynamically by using appropriate attributes every plugin has to
 provide.
 
-[mypy](https://github.com/python/mypy) with `--strict` should not throw any
-error except this one:
-```
-src/tumcsbot/tumcsbot.py:90: error: Module has no attribute "Command"
-```
-and this one (multiple times):
-```
-Cannot find implementation or library stub for module named 'zulip'
-```
+[mypy](https://github.com/python/mypy) with `--strict` should not show any
+significant warnings.
 
 
 model

@@ -21,6 +21,9 @@ debug: run
 clean:
 	@bash -- manage.sh clean '$(dest_dir)'
 
+.PHONY: init
+init: database virtualenv
+
 # prepare database
 .PHONY: database
 database:
