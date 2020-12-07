@@ -90,7 +90,7 @@ class DB:
     Simple wrapper class for conveniently accessing a sqlite database.
     Currently not threadsafe.
     '''
-    path: str = None
+    path: Optional[str] = None
 
     def __init__(self) -> None:
         if not DB.path:
@@ -107,7 +107,7 @@ class DB:
                       '(Name Type, ...)' --> valid SQL!
         '''
         create: str = 'create table {} {};'.format(table, schema)
-        result: sqlite.Cursor = self.execute(
+        result: List[Tuple[Any, ...]] = self.execute(
             ('select * from sqlite_master where type = "table" and '
              'name = "{}";'.format(table))
         )
@@ -132,7 +132,7 @@ class DB:
                             - must be in the form of
                               '(Integer, "String", ...)' --> valid SQL!
         '''
-        result = self.execute(
+        result: List[Tuple[Any, ...]] = self.execute(
             'select * from {} where {} = "{}";'.format(table, key_column, key)
         )
         if not result:
@@ -140,7 +140,7 @@ class DB:
                 'insert into {} values {}'.format(table, default_values)
             )
 
-    def execute(self, command: str) -> List[Tuple]:
+    def execute(self, command: str) -> List[Tuple[Any, ...]]:
         '''
         Execute sql command, save the new database state and return the
         result of the command.

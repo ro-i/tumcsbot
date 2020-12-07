@@ -7,7 +7,7 @@ import re
 import typing
 import urllib.parse
 
-from typing import Any, Dict, Pattern, Tuple
+from typing import Any, Dict, List, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
@@ -28,7 +28,7 @@ class Command(lib.Command):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
-        result: List[Tuple] = self._db.execute('select * from SelfStats;')
+        result: List[Tuple[Any, ...]] = self._db.execute('select * from SelfStats;')
         response: str = 'Command | Count | Since\n---- | ---- | ----'
         for (command, count, since) in result:
             response += '\n{} | {} | {}'.format(
