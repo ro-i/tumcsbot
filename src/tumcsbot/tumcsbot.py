@@ -153,7 +153,8 @@ class TumCSBot:
             logging.debug('received message with mention')
             return True
         elif message['type'] != 'private':
-            logging.debug('received stream message without mention')
+            logging.debug('received stream message without mention '
+                          'or not starting with mention')
             return False
 
         # Now, I know that the message is private and does not start with
@@ -163,10 +164,7 @@ class TumCSBot:
                 logging.debug('received private message')
                 return True
 
-        # should never happen
-        logging.debug(
-            'received private message of which I am not one of the recipients'
-        )
+        logging.debug('received private message not starting with mention')
         return False
 
 
