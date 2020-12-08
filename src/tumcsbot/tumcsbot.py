@@ -150,7 +150,7 @@ class TumCSBot:
         if message['content'].startswith(mention):
             message['full_content'] = message['content']
             message['content'] = message['full_content'][len(mention):]
-            logging.debug('received message with mention')
+            logging.debug('received message starting with mention')
             return True
         elif message['type'] != 'private':
             logging.debug('received stream message without mention '
