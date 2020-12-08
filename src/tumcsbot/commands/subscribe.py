@@ -12,9 +12,10 @@ from typing import Any, Dict, Optional, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
+import tumcsbot.command as command
 
 
-class Command(lib.Command):
+class Command(command.Command):
     name: str = 'subscribe'
     syntax: str = 'subscribe\\n<stream_name1>\\n<stream_name2[\\ndescription]'
     description: str = (

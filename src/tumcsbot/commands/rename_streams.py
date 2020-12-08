@@ -9,10 +9,11 @@ import typing
 from typing import Any, Dict, List, Pattern, Tuple
 from zulip import Client
 
+import tumcsbot.command as command
 import tumcsbot.lib as lib
 
 
-class Command(lib.Command):
+class Command(command.Command):
     name: str = 'rename_streams'
     syntax: str = 'rename_streams\\n<stream_name_old>,<stream_name_new>\\n...'
     description: str = (

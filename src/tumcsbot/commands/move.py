@@ -10,10 +10,11 @@ import urllib.parse
 from typing import Any, Dict, Pattern, Tuple
 from zulip import Client
 
+import tumcsbot.command as command
 import tumcsbot.lib as lib
 
 
-class Command(lib.Command):
+class Command(command.Command):
     name: str = 'move'
     syntax: str = 'move <destination stream>'
     description: str = (

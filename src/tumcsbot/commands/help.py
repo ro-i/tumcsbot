@@ -10,9 +10,10 @@ from typing import Any, Dict, Pattern, Tuple
 from zulip import Client
 
 import tumcsbot.lib as lib
+import tumcsbot.command as command
 
 
-class Command(lib.Command):
+class Command(command.Command):
     name: str = 'help'
     syntax: str = 'help'
     description: str = 'post this help as private message'

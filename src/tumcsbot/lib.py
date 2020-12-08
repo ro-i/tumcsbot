@@ -10,79 +10,36 @@ import urllib.parse
 import urllib.request
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from inspect import cleandoc
 from typing import Any, Dict, List, Optional, Tuple
 from zulip import Client
 
 
-######################
-## Begin: constants ##
-######################
+##################
+## Begin: enums ##
+##################
 
-class Pattern:
-    FILE_CAPTURE: typing.Pattern[str] = re.compile(
-        '\[[^\[\]]*\]\(([^\(\)]*)\)', re.I
-    )
+# cf. https://docs.python.org/3/library/enum.html#others
+class StrEnum(str, Enum):
+    pass
 
 
-class Regex:
+class Regex(StrEnum):
     FILE: str = '\[[^\[\]]*\]\([^\(\)]*\)'
+    FILE_CAPTURE: str = '\[[^\[\]]*\]\(([^\(\)]*)\)'
     OPT_ASTERISKS: str = '(?:\*\*|)'
     STREAM: str = '[^*#]*'
 
 
-class ResponseType:
+class ResponseType(StrEnum):
     MESSAGE: str = 'message'
     EMOJI: str = 'emoji'
     NONE: str = 'none'
 
-######################
-## End: constants ##
-######################
-
-
-class BaseCommand(ABC):
-
-    @abstractmethod
-    def __init__(self, **kwargs: Any) -> None:
-        self._pattern: typing.Pattern[str]
-        pass
-
-    @abstractmethod
-    def func(
-        self,
-        client: Client,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
-        '''
-        Process request and return a tuple containing the type of the
-        response (cf. Response) and the response request itself.
-        '''
-        pass
-
-    def is_responsible(self, message: Dict[str, Any]) -> bool:
-        return self._pattern.fullmatch(message['content']) is not None
-
-
-class Command(BaseCommand):
-    name: str
-    syntax: str
-    description: str
-
-    def get_usage(self) -> Tuple[str, str]:
-        '''
-        Return a tuple containing:
-        - the syntax of the command
-        - its description.
-        Example:
-            ('command [OPTION]... [FILE]...',
-            'this command does a lot of interesting stuff...')
-        The description may contain Zulip-compatible markdown.
-        Newlines in the description will be removed.
-        The syntax string is formatted as code (using backticks) automatically.
-        '''
-        return (type(self).syntax, type(self).description)
+################
+## End: enums ##
+################
 
 
 class DB:
@@ -327,7 +284,9 @@ def parse_filenames(s: str) -> List[str]:
     files: List[str] = []
 
     for file in re.findall(Regex.FILE, s, re.I):
-        match: Optional[typing.Match[Any]] = Pattern.FILE_CAPTURE.match(file)
+        match: Optional[typing.Match[Any]] = re.match(
+            Regex.FILE_CAPTURE, file, re.I
+        )
         if match is None:
             continue
         files.append(match.group(1))

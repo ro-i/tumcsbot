@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from zulip import Client
 
 from . import lib
+from .command import Command
 
 
 class TumCSBot:
@@ -53,7 +54,7 @@ class TumCSBot:
         )
 
         # register plugins
-        self.commands: List[lib.Command] = self.get_all_commands_from_path(
+        self.commands: List[Command] = self.get_all_commands_from_path(
             ['commands']
         )
 
@@ -79,7 +80,7 @@ class TumCSBot:
         self.send_response(response)
 
 
-    def get_all_commands_from_path(self, path: List[str]) -> List[lib.Command]:
+    def get_all_commands_from_path(self, path: List[str]) -> List[Command]:
         '''
         Load all plugins (= commands) from "path".
         Pathes are relative here. All 'path' elements will be
@@ -88,7 +89,7 @@ class TumCSBot:
         documentation string.
         Prepare selfStats database entries.
         '''
-        commands: List[lib.Command] = []
+        commands: List[Command] = []
         docs: List[Tuple[str, str]] = []
 
         # directory path to our package ('path/to/package')
@@ -105,10 +106,10 @@ class TumCSBot:
             module = importlib.__import__(
                 '.'.join([module_path, module_name]), fromlist = ['Command']
             )
-            command: lib.Command = module.Command()
+            command: Command = module.Command()
             commands.append(command)
             # collect usage information
-            if lib.Command in inspect.getmro(type(command)):
+            if Command in inspect.getmro(type(command)):
                 docs.append(command.get_usage())
             # check for corresponding row in database
             self._db.checkout_row(

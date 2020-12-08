@@ -9,10 +9,11 @@ import typing
 from typing import Any, Dict, List, Pattern, Tuple
 from zulip import Client
 
+import tumcsbot.command as command
 import tumcsbot.lib as lib
 
 
-class Command(lib.Command):
+class Command(command.Command):
     name: str = 'create_streams'
     syntax: str = 'create_streams\\n<stream_name>,<stream_description>\\n...'
     description: str = (
