@@ -56,10 +56,6 @@ class TumCSBot:
         self.commands: List[lib.Command] = self.get_all_commands_from_path(
             ['commands']
         )
-        if debug:
-            self.commands.extend(
-                self.get_all_commands_from_path(['commands', 'debug'])
-            )
 
 
     def process_message(self, message: Dict[str, Any]) -> None:
@@ -141,7 +137,6 @@ class TumCSBot:
         message: Dict[str, Any]
     ) -> bool:
         if message['sender_id'] == self.client.get_profile()['user_id']:
-            # message from self
             logging.debug("message from self")
             return False
 
@@ -151,7 +146,6 @@ class TumCSBot:
             message['full_content'] = message['content']
             message['content'] = message['full_content'][len(mention):]
         elif message['type'] != 'private':
-            # stream message without mention
             logging.debug("stream message without mention")
             return False
 
