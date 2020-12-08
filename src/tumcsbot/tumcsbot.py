@@ -123,21 +123,26 @@ class TumCSBot:
         return commands
 
 
-    # important issues to consider:
-    # 1)
-    # - do not react on messages from the bot itself
-    # cf. is_private_message_but_not_group_pm() in
-    # https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
-    # 2)
-    # - remove mention
-    # cf. extract_query_without_mention() in
-    # https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
     def preprocess_and_check_if_responsible(
         self,
         message: Dict[str, Any]
     ) -> bool:
-        if message['sender_id'] == self.client.get_profile()['user_id']:
-            logging.debug("message from self")
+        '''
+        Check if I should handle the message given by the argument
+        "message" and remove the starting mention to me if necessary.
+
+        Important issues to consider:
+          1) do not react on messages from the bot itself
+             cf. is_private_message_but_not_group_pm() in
+          https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
+          2) remove mention
+             cf. extract_query_without_mention() in
+          https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
+        '''
+        my_id: int = self.client.get_profile()['user_id']
+
+        if message['sender_id'] == my_id:
+            logging.debug('received message from self')
             return False
 
         mention: str = '@**' + self.client.get_profile()['full_name'] + '**'
@@ -145,11 +150,24 @@ class TumCSBot:
         if message['content'].startswith(mention):
             message['full_content'] = message['content']
             message['content'] = message['full_content'][len(mention):]
+            logging.debug('received message with mention')
+            return True
         elif message['type'] != 'private':
-            logging.debug("stream message without mention")
+            logging.debug('received stream message without mention')
             return False
 
-        return True
+        # Now, I know that the message is private and does not start with
+        # mentioning me. Check if it is a direct message to me.
+        for recipient in message['display_recipient']:
+            if recipient['id'] == my_id:
+                logging.debug('received private message')
+                return True
+
+        # should never happen
+        logging.debug(
+            'received private message of which I am not one of the recipients'
+        )
+        return False
 
 
     def run(self, message: Dict[str, Any]) -> None:
