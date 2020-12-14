@@ -21,10 +21,10 @@ class Command(command.Command):
                    'msg list')
     description: str = ('store a message for later use, send or delete a '
                         'stored message or list all stored messages')
-    _search_cmd: str = 'select m.Text from Messages m where m.Id = ?'
-    _update_cmd: str = 'update Messages set Text = ? where Id = ?'
+    _search_cmd: str = 'select m.Text from Messages m where m.Id = ? collate nocase'
+    _update_cmd: str = 'update Messages set Text = ? where Id = ? collate nocase'
     _insert_cmd: str = 'insert into Messages values (?,?)'
-    _delete_cmd: str = 'delete from Messages where Id = ?'
+    _delete_cmd: str = 'delete from Messages where Id = ? collate nocase'
     _list_cmd: str = 'select * from Messages'
 
     def __init__(self, **kwargs: Any):
