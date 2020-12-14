@@ -63,13 +63,15 @@ class DB:
             schema  schema of the table in the form of
                       '(Name Type, ...)' --> valid SQL!
         '''
-        create: str = 'create table {} {};'.format(table, schema)
         result: List[Tuple[Any, ...]] = self.execute(
             ('select * from sqlite_master where type = "table" and '
              'name = "{}";'.format(table))
         )
         if not result:
-            self.execute(create)
+            self.execute(
+                'create table {} {};'.format(table, schema),
+                commit = True
+            )
 
     def checkout_row(
         self,
@@ -95,15 +97,23 @@ class DB:
         if not result:
             self.execute(
                 'insert into {} values {}'.format(table, default_values)
+                commit = True
             )
 
-    def execute(self, command: str) -> List[Tuple[Any, ...]]:
+    def execute(
+        self,
+        command: str,
+        *args,
+        commit: bool = False
+    ) -> List[Tuple[Any, ...]]:
         '''
-        Execute sql command, save the new database state and return the
-        result of the command.
+        Execute sql command, save the new database state
+        (if commit == True) and return the result of the command.
+        Forward 'args' to cursor.execute()
         '''
-        result: sqlite.Cursor = self.cursor.execute(command)
-        self.connection.commit()
+        result: sqlite.Cursor = self.cursor.execute(command, args)
+        if commit:
+            self.connection.commit()
         return result.fetchall()
 
 

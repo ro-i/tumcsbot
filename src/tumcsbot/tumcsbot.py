@@ -71,6 +71,7 @@ class TumCSBot:
                 response = command.func(self.client, message)
                 self._db.execute(
                     TumCSBot._update_selfStats_sql.format(command.name)
+                    commit = True
                 )
                 break
 
