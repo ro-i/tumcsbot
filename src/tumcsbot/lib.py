@@ -190,6 +190,7 @@ class Response:
     )
     greet_msg: str = 'Hi {}! :-)'
     ok_emoji: str = 'ok'
+    no_emoji: str = 'cross_mark'
 
     @classmethod
     def admin_err(
@@ -238,6 +239,12 @@ class Response:
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
         return build_reaction(message, cls.ok_emoji)
+
+    @classmethod
+    def no(
+        cls, message: Dict[str, Any]
+    ) -> Tuple[str, Dict[str, Any]]:
+        return build_reaction(message, cls.no_emoji)
 
 
 def build_message(
