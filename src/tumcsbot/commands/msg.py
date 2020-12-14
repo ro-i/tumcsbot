@@ -60,6 +60,9 @@ class Command(command.Command):
     ) -> Tuple[str, Dict[str, Any]]:
         result: List[Tuple[Any, ...]]
 
+        if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+            return lib.Response.admin_err(message)
+
         # get command and parameters
         match: Optional[Match[str]] = (
             self._pattern_store.match(message['content'])
