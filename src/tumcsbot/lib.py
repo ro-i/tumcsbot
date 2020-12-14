@@ -96,7 +96,7 @@ class DB:
         )
         if not result:
             self.execute(
-                'insert into {} values {}'.format(table, default_values)
+                'insert into {} values {}'.format(table, default_values),
                 commit = True
             )
 
