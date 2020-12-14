@@ -16,7 +16,7 @@ import tumcsbot.lib as lib
 
 class Command(command.Command):
     name: str = 'self_stats'
-    syntax: str = '[Experimental] self_stats'
+    syntax: str = 'self_stats'
     description: str = 'get some statistics about the usage of this bot'
 
     def __init__(self, **kwargs: Any):
