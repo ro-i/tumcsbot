@@ -5,7 +5,6 @@
 
 import re
 import typing
-import urllib.parse
 
 from typing import Any, Dict, List, Pattern, Tuple
 from zulip import Client
