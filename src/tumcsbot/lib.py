@@ -103,7 +103,7 @@ class DB:
     def execute(
         self,
         command: str,
-        *args,
+        *args: Any,
         commit: bool = False
     ) -> List[Tuple[Any, ...]]:
         '''
@@ -283,30 +283,4 @@ def build_reaction(
         ResponseType.EMOJI,
         dict(message_id = message['id'], emoji_name = emoji)
     )
-
-
-# cf. https://github.com/zulip/python-zulip-api/issues/628
-def get_file(client: Client, file_path: str) -> str:
-    url: str = client.get_server_settings()['realm_uri'] + file_path
-
-    data = urllib.parse.urlencode({ 'api_key': client.api_key })
-
-    with urllib.request.urlopen(url + '?' + data) as file:
-        content: str = file.read().decode()
-
-    return content
-
-
-def parse_filenames(s: str) -> List[str]:
-    files: List[str] = []
-
-    for file in re.findall(Regex.FILE, s, re.I):
-        match: Optional[typing.Match[Any]] = re.match(
-            Regex.FILE_CAPTURE, file, re.I
-        )
-        if match is None:
-            continue
-        files.append(match.group(1))
-
-    return files
 
