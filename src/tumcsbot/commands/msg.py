@@ -5,7 +5,6 @@
 
 import re
 import typing
-import urllib.parse
 
 from typing import Any, Dict, List, Match, Optional, Pattern, Sequence, Tuple, Union
 from zulip import Client
@@ -16,16 +15,16 @@ import tumcsbot.lib as lib
 
 class Command(command.Command):
     name: str = 'msg'
-    syntax: str = ('[Experimental] msg store\\n<identifier>\\n<text> or '
+    syntax: str = ('[Experimental] msg store <identifier>\\n<text> or '
                    'msg send|delete <identifier> or '
                    'msg list')
     description: str = ('store a message for later use, send or delete a '
                         'stored message or list all stored messages')
-    _search_cmd: str = 'select m.Text from Messages m where m.Id = ? collate nocase'
-    _update_cmd: str = 'update Messages set Text = ? where Id = ? collate nocase'
-    _insert_cmd: str = 'insert into Messages values (?,?)'
-    _delete_cmd: str = 'delete from Messages where Id = ? collate nocase'
-    _list_cmd: str = 'select * from Messages'
+    _search_sql: str = 'select m.Text from Messages m where m.Id = ? collate nocase'
+    _update_sql: str = 'update Messages set Text = ? where Id = ? collate nocase'
+    _insert_sql: str = 'insert into Messages values (?,?)'
+    _delete_sql: str = 'delete from Messages where Id = ? collate nocase'
+    _list_sql: str = 'select * from Messages'
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(
@@ -76,14 +75,14 @@ class Command(command.Command):
         args: Union[Sequence[str], Any] = match.groups()
 
         if args[0] == 'list':
-            result = self._db.execute(Command._list_cmd)
-            response: str = '**Id**: Text'
+            result = self._db.execute(Command._list_sql)
+            response: str = '***List of Identifiers and Messages***\n'
             for (ident, text) in result:
-                response += '\n--------\n**{}**:\n{}'.format(ident, text)
+                response += '\n--------\nTitle: **{}**\n{}'.format(ident, text)
             return lib.build_message(message, response)
 
         # search for identifier in database table
-        result = self._db.execute(Command._search_cmd, args[1])
+        result = self._db.execute(Command._search_sql, args[1].strip())
 
         if args[0] == 'send':
             if not result:
@@ -92,14 +91,18 @@ class Command(command.Command):
             client.delete_message(message['id'])
             return lib.build_message(message, result[0][0])
         elif args[0] == 'store':
-            self._db.execute(
-                Command._update_cmd if result else Command._insert_cmd,
-                args[1], args[2], commit = True
-            )
+            if result:
+                self._db.execute(
+                    Command._update_sql, args[2], args[1].strip(), commit = True
+                )
+            else:
+                self._db.execute(
+                    Command._insert_sql, args[1].strip(), args[2], commit = True
+                )
         elif args[0] == 'delete':
             if not result:
                 return lib.Response.no(message)
-            self._db.execute(Command._delete_cmd, args[1], commit = True)
+            self._db.execute(Command._delete_sql, args[1].strip(), commit = True)
 
         return lib.Response.ok(message)
 
