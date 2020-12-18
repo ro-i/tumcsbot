@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'source'
     syntax: str = 'source'
     description: str = 'post the link to the repository of my source code'
@@ -21,11 +22,13 @@ class Command(command.Command):
     def __init__(self, me: bool = False, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile('\s*source\s*', re.I)
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
-        return lib.build_message(message, 'https://github.com/ro-i/tumcsbot')
+        return lib.Response.build_message(
+            message, 'https://github.com/ro-i/tumcsbot'
+        )
 

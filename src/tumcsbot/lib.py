@@ -12,8 +12,9 @@ import urllib.request
 from abc import ABC, abstractmethod
 from enum import Enum
 from inspect import cleandoc
-from typing import Any, Dict, List, Optional, Tuple
-from zulip import Client
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from .client import Client
 
 
 ##################
@@ -32,7 +33,7 @@ class Regex(StrEnum):
     STREAM: str = '[^*#]*'
 
 
-class ResponseType(StrEnum):
+class MessageType(StrEnum):
     MESSAGE: str = 'message'
     EMOJI: str = 'emoji'
     NONE: str = 'none'
@@ -193,10 +194,52 @@ class Response:
     no_emoji: str = 'cross_mark'
 
     @classmethod
+    def build_message(
+        cls,
+        message: Dict[str, Any],
+        response: str,
+        type: Optional[str] = None,
+        to: Optional[str] = None,
+        subject: Optional[str] = None
+    ) -> Tuple[str, Dict[str, Any]]:
+        if type is None:
+            type = message['type']
+        private: bool = type == 'private'
+
+        if to is None:
+            to = message['sender_email'] if private else message['stream_id']
+
+        if subject is None:
+            subject = message['subject'] if not private else ''
+
+        if private:
+            return new_private_message(
+                to = to,
+                content = response
+            )
+        else:
+            return new_stream_message(
+                stream = to,
+                subject = subject,
+                content = response
+            )
+
+    @classmethod
+    def build_reaction(
+        cls,
+        message: Dict[str, Any],
+        emoji: str
+    ) -> Tuple[str, Dict[str, Any]]:
+        return (
+            MessageType.EMOJI,
+            dict(message_id = message['id'], emoji_name = emoji)
+        )
+
+    @classmethod
     def admin_err(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_message(
+        return cls.build_message(
             message,
             cls.admin_err_msg.format(message['sender_full_name'])
         )
@@ -205,7 +248,7 @@ class Response:
     def command_not_found(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_message(
+        return cls.build_message(
             message,
             cls.command_not_found_msg.format(message['sender_full_name'])
         )
@@ -214,7 +257,7 @@ class Response:
     def error(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_message(
+        return cls.build_message(
             message, cls.error_msg.format(message['sender_full_name'])
         )
 
@@ -222,7 +265,7 @@ class Response:
     def exception(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_message(
+        return cls.build_message(
             message, cls.exception_msg.format(message['sender_full_name'])
         )
 
@@ -230,7 +273,7 @@ class Response:
     def greet(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_message(
+        return cls.build_message(
             message, cls.greet_msg.format(message['sender_full_name'])
         )
 
@@ -238,49 +281,54 @@ class Response:
     def ok(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_reaction(message, cls.ok_emoji)
+        return cls.build_reaction(message, cls.ok_emoji)
 
     @classmethod
     def no(
         cls, message: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
-        return build_reaction(message, cls.no_emoji)
+        return cls.build_reaction(message, cls.no_emoji)
+
+    @classmethod
+    def none(cls) -> Tuple[str, Dict[str, Any]]:
+        '''no response'''
+        return (MessageType.NONE, {})
 
 
-def build_message(
-    message: Dict[str, Any],
-    response: str,
-    type: Optional[str] = None,
-    to: Optional[str] = None,
-    subject: Optional[str] = None
+def new_private_message(
+    to: Union[str, int],
+    content: str
 ) -> Tuple[str, Dict[str, Any]]:
-    if type is None:
-        type = message['type']
-    private: bool = type == 'private'
-
-    if to is None:
-        to = message['sender_email'] if private else message['stream_id']
-
-    if subject is None:
-        subject = message['subject'] if not private else ''
-
+    '''
+    Send private message. "to" is either a list containing integer user
+    IDs or a list containing string email addresses.
+    '''
     return (
-        ResponseType.MESSAGE,
+        MessageType.MESSAGE,
         dict(
-            type = type,
+            type = 'private',
             to = to,
-            subject = subject,
-            content = response
+            content = content
         )
     )
 
 
-def build_reaction(
-    message: Dict[str, Any],
-    emoji: str
+def new_stream_message(
+    stream: Union[str, int],
+    subject: str,
+    content: str
 ) -> Tuple[str, Dict[str, Any]]:
+    '''
+    Send stream message. "stream" is either the name or the integer ID
+    of the stream.
+    '''
     return (
-        ResponseType.EMOJI,
-        dict(message_id = message['id'], emoji_name = emoji)
+        MessageType.MESSAGE,
+        dict(
+            type = 'stream',
+            to = stream,
+            subject = subject,
+            content = content
+        )
     )
 

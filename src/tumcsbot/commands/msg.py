@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, List, Match, Optional, Pattern, Sequence, Tuple, Union
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'msg'
     syntax: str = ('[Experimental] msg store <identifier>\\n<text> or '
                    'msg send|delete <identifier> or '
@@ -51,7 +52,7 @@ class Command(command.Command):
             schema = '(Id varchar, Text varchar)'
         )
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -79,7 +80,7 @@ class Command(command.Command):
             response: str = '***List of Identifiers and Messages***\n'
             for (ident, text) in result:
                 response += '\n--------\nTitle: **{}**\n{}'.format(ident, text)
-            return lib.build_message(message, response)
+            return lib.Response.build_message(message, response)
 
         # search for identifier in database table
         result = self._db.execute(Command._search_sql, args[1].strip())
@@ -89,7 +90,7 @@ class Command(command.Command):
                 return lib.Response.no(message)
             # remove requesting message
             client.delete_message(message['id'])
-            return lib.build_message(message, result[0][0])
+            return lib.Response.build_message(message, result[0][0])
         elif args[0] == 'store':
             if result:
                 self._db.execute(

@@ -8,13 +8,14 @@ import typing
 import urllib.parse
 
 from typing import Any, Dict, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'search'
     syntax: str = 'search <string>'
     description: str = ('get a url to a search for "string" in all public streams')
@@ -24,7 +25,7 @@ class Command(command.Command):
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile('\s*search\s+(\S+.*)', re.I)
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -42,4 +43,6 @@ class Command(command.Command):
         url: str = base_url + Command.path + search
         # remove requesting message
         client.delete_message(message['id'])
-        return lib.build_message(message, Command.msg_template.format(url))
+        return lib.Response.build_message(
+            message, Command.msg_template.format(url)
+        )

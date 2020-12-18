@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'move'
     syntax: str = 'move <destination stream>'
     description: str = (
@@ -32,7 +33,7 @@ class Command(command.Command):
             re.I
         )
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -42,7 +43,7 @@ class Command(command.Command):
         result: Dict[str, Any]
 
         if 'stream_id' not in message:
-            return lib.build_message(message, 'Error: Not a stream topic')
+            return lib.Response.build_message(message, 'Error: Not a stream topic')
         # remove requesting message
         client.delete_message(message['id'])
 
@@ -84,7 +85,7 @@ class Command(command.Command):
         if result['result'] != 'success':
             return lib.Response.error(message)
 
-        return lib.build_message(
+        return lib.Response.build_message(
             first_message,
             Command.msg_template.format(first_message['sender_full_name'], topic, dest_stream),
             type = 'private'

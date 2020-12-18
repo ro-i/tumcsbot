@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'create_streams'
     syntax: str = 'create_streams\\n<stream_name>,<stream_description>\\n...'
     description: str = (
@@ -27,7 +28,7 @@ class Command(command.Command):
             '\s*create_streams\s*.+', re.I | re.DOTALL
         )
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -69,7 +70,7 @@ class Command(command.Command):
         for line in failed:
             response += '\n' + line
 
-        return lib.build_message(
+        return lib.Response.build_message(
             message,
             response,
             type = 'private'

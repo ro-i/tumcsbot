@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.lib as lib
 import tumcsbot.command as command
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'help'
     syntax: str = 'help'
     description: str = 'post this help as private message'
@@ -21,13 +22,13 @@ class Command(command.Command):
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile('\s*help\s*', re.I)
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
-        return lib.build_message(
+        return lib.Response.build_message(
             message,
             lib.Helper.get_help(user = message['sender_full_name']),
             type = 'private',

@@ -11,11 +11,11 @@ import re
 import typing
 
 from inspect import cleandoc
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from zulip import Client
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from .client import Client
 from . import lib
-from .command import Command
+from .command import Command, CommandInteractive
 
 
 class TumCSBot:
@@ -41,8 +41,15 @@ class TumCSBot:
         else:
             logging.basicConfig(filename = logfile)
 
-        # init Zulip client
+        # init Zulip client ...
         self.client: Client = Client(config_file = zuliprc)
+        # ... and already calculate some constants we need later in
+        # preprocess_and_check_if_responsible()
+        self._client_id: int = self.client.get_profile()['user_id']
+        self._client_mention: str = '@**{}**'.format(
+            self.client.get_profile()['full_name']
+        )
+        self._client_mention_len: int = len(self._client_mention)
         # init database handler
         lib.DB.path = db_path
         # get an own database connection
@@ -54,40 +61,18 @@ class TumCSBot:
         )
 
         # register plugins
-        self.commands: List[Command] = self.get_all_commands_from_path(
-            ['commands']
-        )
+        self.commands: List[Command] = self.get_commands_from_path(['commands'])
+        # register events
+        self.events: List[str] = self.get_events_from_commands(self.commands)
 
 
-    def process_message(self, message: Dict[str, Any]) -> None:
-        if message['content'] == '':
-            self.send_response(lib.Response.greet(message))
-            return
-
-        response: Optional[Tuple[str, Dict[str, Any]]] = None
-
-        for command in self.commands:
-            if command.is_responsible(message):
-                response = command.func(self.client, message)
-                self._db.execute(
-                    TumCSBot._update_selfStats_sql.format(command.name),
-                    commit = True
-                )
-                break
-
-        if response is None:
-            response = lib.Response.command_not_found(message)
-
-        self.send_response(response)
-
-
-    def get_all_commands_from_path(self, path: List[str]) -> List[Command]:
+    def get_commands_from_path(self, path: List[str]) -> List[Command]:
         '''
         Load all plugins (= commands) from "path".
         Pathes are relative here. All 'path' elements will be
         concatenated appropriately.
         Do not only receive the Command classes, but also their usage
-        documentation string.
+        documentation string.client.get_profile()['user_id']:
         Prepare selfStats database entries.
         '''
         commands: List[Command] = []
@@ -110,7 +95,7 @@ class TumCSBot:
             command: Command = module.Command()
             commands.append(command)
             # collect usage information
-            if Command in inspect.getmro(type(command)):
+            if isinstance(command, CommandInteractive):
                 docs.append(command.get_usage())
             # check for corresponding row in database
             self._db.checkout_row(
@@ -125,71 +110,84 @@ class TumCSBot:
         return commands
 
 
-    def preprocess_and_check_if_responsible(
+    def message_preprocess(
         self,
         message: Dict[str, Any]
     ) -> bool:
         '''
-        Check if I should handle the message given by the argument
-        "message" and remove the starting mention to me if necessary.
-
-        Important issues to consider:
-          1) do not react on messages from the bot itself
-             cf. is_private_message_but_not_group_pm() in
-          https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
-          2) remove mention
-             cf. extract_query_without_mention() in
-          https://github.com/zulip/python-zulip-api/blob/master/zulip_bots/zulip_bots/lib.py
+        Check if the bot is responsible for this message, i.e. if it is
+        a private message to it or a message starting with mentioning
+        the bot. If the message starts with mentioning it, remove the
+        mention.
         '''
-        my_id: int = self.client.get_profile()['user_id']
-
-        if message['sender_id'] == my_id:
-            logging.debug('received message from self')
+        if message['sender_id'] == self._client_id:
+            # reject message from the bot itself
             return False
-
-        mention: str = '@**' + self.client.get_profile()['full_name'] + '**'
-
-        if message['content'].startswith(mention):
-            message['full_content'] = message['content']
-            message['content'] = message['full_content'][len(mention):]
-            logging.debug('received message starting with mention')
+        elif message['content'].startswith(self._client_mention):
+            # message starts with mentioning the bot; remove the mention
+            message['content'] = message['content'][self._client_mention_len:]
             return True
-        elif message['type'] != 'private':
-            logging.debug('received stream message without mention '
-                          'or not starting with mention')
+        elif message['type'] == 'private':
+            # private message to the bot (no mention needed)
+            return True
+        else:
             return False
 
-        # Now, I know that the message is private and does not start with
-        # mentioning me. Check if it is a direct message to me.
-        for recipient in message['display_recipient']:
-            if recipient['id'] == my_id:
-                logging.debug('received private message')
-                return True
 
-        logging.debug('received private message not starting with mention')
-        return False
+    def process_event(self, event: Dict[str, Any]) -> None:
+        response: Optional[Tuple[str, Dict[str, Any]]] = None
 
-
-    def run(self, message: Dict[str, Any]) -> None:
-        if not self.preprocess_and_check_if_responsible(message):
+        if (event['type'] == 'message' and not
+                self.message_preprocess(event['message'])):
             return
 
+        for command in self.commands:
+            if command.is_responsible(self.client, event):
+                response = command.func(self.client, event)
+                self._db.execute(
+                    TumCSBot._update_selfStats_sql.format(command.name),
+                    commit = True
+                )
+                break
+
+        if response is not None:
+            self.send_response(response)
+
+
+    def get_events_from_commands(self, commands: List[Command]) -> List[str]:
+        '''
+        Every command decides on its own which events it likes to receive.
+        '''
+        events: Set[str] = set()
+
+        for command in commands:
+            for event in command.events:
+                events.add(event)
+
+        return list(events)
+
+
+    def run(self, event: Dict[str, Any]) -> None:
+        logging.debug('Received event: ' + str(event))
         try:
-            self.process_message(message)
+            self.process_event(event)
         except Exception as e:
             logging.exception(e)
-            self.send_response(lib.Response.exception(message))
 
 
     def send_response(self, response: Tuple[str, Dict[str, Any]]) -> None:
         logging.debug('send_response: ' + str(response))
 
-        if response[0] == lib.ResponseType.MESSAGE:
+        if response[0] == lib.MessageType.MESSAGE:
             self.client.send_message(response[1])
-        elif response[0] == lib.ResponseType.EMOJI:
+        elif response[0] == lib.MessageType.EMOJI:
             self.client.add_reaction(response[1])
 
 
     def start(self) -> None:
-        self.client.call_on_each_message(lambda msg: self.run(msg))
+        logging.debug('Listening on events: ' + str(self.events))
+        self.client.call_on_each_event(
+            lambda event: self.run(event),
+            event_types = self.events
+        )
 

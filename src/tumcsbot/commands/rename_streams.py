@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'rename_streams'
     syntax: str = 'rename_streams\\n<stream_name_old>,<stream_name_new>\\n...'
     description: str = (
@@ -27,7 +28,7 @@ class Command(command.Command):
             '\s*rename_streams\s*.+', re.I | re.DOTALL
         )
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -71,7 +72,7 @@ class Command(command.Command):
         for line in failed:
             response += '\n' + line
 
-        return lib.build_message(
+        return lib.Response.build_message(
             message,
             response,
             type = 'private'

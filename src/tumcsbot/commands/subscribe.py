@@ -9,13 +9,14 @@ import typing
 
 from inspect import cleandoc
 from typing import Any, Dict, Optional, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.lib as lib
 import tumcsbot.command as command
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'subscribe'
     syntax: str = 'subscribe\\n<stream_name1>\\n<stream_name2[\\ndescription]'
     description: str = (
@@ -43,11 +44,11 @@ class Command(command.Command):
         )
 
     def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
-        return lib.build_message(
+        return lib.Response.build_message(
             message, type(self).err_msg.format(message['sender_full_name'])
         )
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],

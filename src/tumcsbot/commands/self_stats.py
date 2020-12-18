@@ -7,13 +7,14 @@ import re
 import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
-from zulip import Client
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
 
+from tumcsbot.client import Client
 
-class Command(command.Command):
+
+class Command(command.CommandInteractive):
     name: str = 'self_stats'
     syntax: str = 'self_stats'
     description: str = 'get some statistics about the usage of this bot'
@@ -22,7 +23,7 @@ class Command(command.Command):
         self._pattern: Pattern[str] = re.compile('\s*self_stats\s*', re.I)
         self._db: lib.DB = lib.DB()
 
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
@@ -34,4 +35,4 @@ class Command(command.Command):
             response += '\n{} | {} | {}'.format(
                 command, count, since
             )
-        return lib.build_message(message, response)
+        return lib.Response.build_message(message, response)

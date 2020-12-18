@@ -3,18 +3,58 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
+import logging
 import re
 import typing
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
-from zulip import Client
+
+from tumcsbot.client import Client
 
 
 class Command(ABC):
     name: str
+    # Zulip events to listen to, see https://zulip.com/api/get-events
+    events: List[str]
+
+    @abstractmethod
+    def __init__(self, **kwargs: Any) -> None:
+        pass
+
+    @abstractmethod
+    def func(
+        self,
+        client: Client,
+        event: Dict[str, Any],
+        **kwargs: Any
+    ) -> Tuple[str, Dict[str, Any]]:
+        '''
+        Process request and return a tuple containing the type of the
+        response (cf. Response) and the response itself.
+        '''
+        pass
+
+    def is_responsible(
+        self,
+        client: Client,
+        event: Dict[str, Any]
+    ) -> bool:
+        '''
+        Provide a minimal default implementation for a
+        responsibility check.
+        '''
+        logging.debug('Command.is_responsible: ' + str(event))
+        return event['type'] in type(self).events
+
+
+class CommandInteractive(Command):
+    '''
+    This class is a simple base class for commands triggered by messages.
+    '''
     syntax: str
     description: str
+    events: List[str] = ['message']
 
     @abstractmethod
     def __init__(self, **kwargs: Any) -> None:
@@ -22,17 +62,26 @@ class Command(ABC):
         pass
 
     @abstractmethod
-    def func(
+    def handle_message(
         self,
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Tuple[str, Dict[str, Any]]:
-        '''
-        Process request and return a tuple containing the type of the
-        response (cf. Response) and the response request itself.
-        '''
+        '''Handle preprocessed message.'''
         pass
+
+    def func(
+        self,
+        client: Client,
+        event: Dict[str, Any],
+        **kwargs: Any
+    ) -> Tuple[str, Dict[str, Any]]:
+        '''
+        Turn an event into a message object and call the "handle_message"
+        method of the implementing class.
+        '''
+        return self.handle_message(client, event['message'], **kwargs)
 
     def get_usage(self) -> Tuple[str, str]:
         '''
@@ -48,6 +97,13 @@ class Command(ABC):
         '''
         return (type(self).syntax, type(self).description)
 
-    def is_responsible(self, message: Dict[str, Any]) -> bool:
-        return self._pattern.fullmatch(message['content']) is not None
+    def is_responsible(
+        self,
+        client: Client,
+        event: Dict[str, Any]
+    ) -> bool:
+        return (
+            super().is_responsible(client, event)
+            and self._pattern.fullmatch(event['message']['content']) is not None
+        )
 
