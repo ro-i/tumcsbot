@@ -21,10 +21,10 @@ class StrEnum(str, Enum):
 
 
 class Regex(StrEnum):
-    FILE: str = '\[[^\[\]]*\]\([^\(\)]*\)'
-    FILE_CAPTURE: str = '\[[^\[\]]*\]\(([^\(\)]*)\)'
-    OPT_ASTERISKS: str = '(?:\*\*|)'
-    STREAM: str = '[^*#]*'
+    FILE: str = r'\[[^\[\]]*\]\([^\(\)]*\)'
+    FILE_CAPTURE: str = r'\[[^\[\]]*\]\(([^\(\)]*)\)'
+    OPT_ASTERISKS: str = r'(?:\*\*|)'
+    STREAM: str = r'[^*#]*'
 
 
 class MessageType(StrEnum):
@@ -145,7 +145,7 @@ class Helper:
         for (syntax, desc) in docs:
             syntax = '- `' + syntax.replace('\n', '') + '`'
             # replace multiple newlines by a single one
-            desc = re.sub('\n{2,}', '\n', desc)
+            desc = re.sub(r'\n{2,}', '\n', desc)
             if not desc.endswith('\n'):
                 desc += '\n'
             # ensure one (!) joining newline
@@ -325,4 +325,3 @@ def new_stream_message(
             'content': content
         })
     )
-

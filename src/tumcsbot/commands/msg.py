@@ -28,20 +28,20 @@ class Command(command.CommandInteractive):
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(
-            '\s*msg\s*(?:store *[^\n]+\n.+|send *[^\n]+|delete *[^\n]+|list\s*)',
+            r'\s*msg\s*(?:store *[^\n]+\n.+|send *[^\n]+|delete *[^\n]+|list\s*)',
             re.I | re.DOTALL
         )
         self._pattern_store: Pattern[str] = re.compile(
-            '\s*msg\s*(store) *([^\n]+)\n(.+)', re.I | re.DOTALL
+            r'\s*msg\s*(store) *([^\n]+)\n(.+)', re.I | re.DOTALL
         )
         self._pattern_send: Pattern[str] = re.compile(
-            '\s*msg\s*(send) *(.+)', re.I
+            r'\s*msg\s*(send) *(.+)', re.I
         )
         self._pattern_delete: Pattern[str] = re.compile(
-            '\s*msg\s*(delete) *(.+)', re.I
+            r'\s*msg\s*(delete) *(.+)', re.I
         )
         self._pattern_list: Pattern[str] = re.compile(
-            '\s*msg\s*(list)\s*', re.I
+            r'\s*msg\s*(list)\s*', re.I
         )
         # get own database connection
         self._db = lib.DB()
@@ -105,4 +105,3 @@ class Command(command.CommandInteractive):
             self._db.execute(Command._delete_sql, args[1].strip(), commit = True)
 
         return lib.Response.ok(message)
-

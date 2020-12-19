@@ -19,7 +19,7 @@ class Command(command.CommandInteractive):
     description: str = 'post this help as private message'
 
     def __init__(self, **kwargs: Any):
-        self._pattern: Pattern[str] = re.compile('\s*help\s*', re.I)
+        self._pattern: Pattern[str] = re.compile(r'\s*help\s*', re.I)
 
     def handle_message(
         self,
@@ -33,4 +33,3 @@ class Command(command.CommandInteractive):
             msg_type = 'private',
             to = message['sender_email']
         )
-

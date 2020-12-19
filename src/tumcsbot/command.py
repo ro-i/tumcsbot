@@ -105,4 +105,3 @@ class CommandInteractive(Command):
             and event['message']['interactive'] # see tumcsbot message_preprocess()
             and self._pattern.fullmatch(event['message']['command']) is not None
         )
-

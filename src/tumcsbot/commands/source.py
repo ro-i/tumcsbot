@@ -19,7 +19,7 @@ class Command(command.CommandInteractive):
     description: str = 'post the link to the repository of my source code'
 
     def __init__(self, **kwargs: Any):
-        self._pattern: Pattern[str] = re.compile('\s*source\s*', re.I)
+        self._pattern: Pattern[str] = re.compile(r'\s*source\s*', re.I)
 
     def handle_message(
         self,
@@ -30,4 +30,3 @@ class Command(command.CommandInteractive):
         return lib.Response.build_message(
             message, 'https://github.com/ro-i/tumcsbot'
         )
-

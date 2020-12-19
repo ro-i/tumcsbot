@@ -32,4 +32,3 @@ class Client(ZulipClient):
         return super().register(
             event_types, narrow, all_public_streams = True,
         )
-

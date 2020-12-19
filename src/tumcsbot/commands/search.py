@@ -22,7 +22,7 @@ class Command(command.CommandInteractive):
     path: str = '#narrow/streams/public/search/'
 
     def __init__(self, **kwargs: Any):
-        self._pattern: Pattern[str] = re.compile('\s*search\s+(\S+.*)', re.I)
+        self._pattern: Pattern[str] = re.compile(r'\s*search\s+(\S+.*)', re.I)
 
     def handle_message(
         self,

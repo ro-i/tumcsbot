@@ -197,4 +197,3 @@ class TumCSBot:
             lambda event: self.run(event),
             event_types = self.events
         )
-

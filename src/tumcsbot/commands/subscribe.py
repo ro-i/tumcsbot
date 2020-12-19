@@ -79,4 +79,3 @@ class Command(command.CommandInteractive):
             return self.err(message)
 
         return lib.Response.ok(message)
-

@@ -24,7 +24,7 @@ class Command(command.CommandInteractive):
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
-            '\s*create_streams\s*.+', re.I | re.DOTALL
+            r'\s*create_streams\s*.+', re.I | re.DOTALL
         )
 
     def handle_message(
