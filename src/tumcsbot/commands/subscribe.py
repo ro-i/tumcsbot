@@ -72,12 +72,17 @@ class Command(command.CommandInteractive):
         if subs['result'] != 'success':
             return self.err(message)
 
-        result: Dict[str, Any] = client.add_subscriptions(
-            streams = [{'name': to_stream, 'description': description}],
-            principals = subs['subscribers']
-        )
+        subs_len: int = len(subs['subscribers'])
 
-        if result['result'] != 'success':
-            return self.err(message)
+        # Only subscribe max. 500 users at once
+        for i in range(0, subs_len, 500):
+            result: Dict[str, Any] = client.add_subscriptions(
+                streams = [{'name': to_stream, 'description': description}],
+                principals = subs['subscribers'][i:i + 500]
+            )
+            # (a too large index will be automatically reduced to len())
+
+            if result['result'] != 'success':
+                return self.err(message)
 
         return lib.Response.ok(message)
