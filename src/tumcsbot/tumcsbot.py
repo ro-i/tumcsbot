@@ -135,6 +135,7 @@ class TumCSBot:
             interactive = True
         elif message['type'] == 'private':
             # private message to the bot (no mention needed)
+            message['command'] = message['content']
             interactive = True
 
         message['interactive'] = interactive
