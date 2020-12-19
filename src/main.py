@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import argparse
-import typing
 
 from tumcsbot.tumcsbot import TumCSBot
 

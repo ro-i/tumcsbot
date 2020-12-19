@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
 
@@ -53,13 +52,13 @@ class Command(command.CommandInteractive):
                 continue
 
             try:
-                id: int = client.get_stream_id(name_old)['stream_id']
+                s_id: int = client.get_stream_id(name_old)['stream_id']
             except:
                 failed.append(line)
                 continue
 
             result: Dict[str, Any] = client.update_stream(
-                {'stream_id': id, 'new_name': '"{}"'.format(name_new)}
+                {'stream_id': s_id, 'new_name': '"{}"'.format(name_new)}
             )
 
             if result['result'] != 'success':
@@ -75,5 +74,5 @@ class Command(command.CommandInteractive):
         return lib.Response.build_message(
             message,
             response,
-            type = 'private'
+            msg_type = 'private'
         )

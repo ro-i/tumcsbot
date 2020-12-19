@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 
 from typing import Any, Dict, Pattern, Tuple
 
@@ -19,7 +18,7 @@ class Command(command.CommandInteractive):
     syntax: str = 'source'
     description: str = 'post the link to the repository of my source code'
 
-    def __init__(self, me: bool = False, **kwargs: Any):
+    def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile('\s*source\s*', re.I)
 
     def handle_message(

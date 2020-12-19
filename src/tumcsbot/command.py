@@ -4,11 +4,9 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import logging
-import re
-import typing
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Pattern, Tuple
 
 from tumcsbot.client import Client
 
@@ -58,7 +56,7 @@ class CommandInteractive(Command):
 
     @abstractmethod
     def __init__(self, **kwargs: Any) -> None:
-        self._pattern: typing.Pattern[str]
+        self._pattern: Pattern[str]
         pass
 
     @abstractmethod

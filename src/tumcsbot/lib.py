@@ -5,16 +5,10 @@
 
 import re
 import sqlite3 as sqlite
-import typing
-import urllib.parse
-import urllib.request
 
-from abc import ABC, abstractmethod
 from enum import Enum
 from inspect import cleandoc
 from typing import Any, Dict, List, Optional, Tuple, Union
-
-from .client import Client
 
 
 ##################
@@ -198,13 +192,13 @@ class Response:
         cls,
         message: Dict[str, Any],
         response: str,
-        type: Optional[str] = None,
+        msg_type: Optional[str] = None,
         to: Optional[str] = None,
         subject: Optional[str] = None
     ) -> Tuple[str, Dict[str, Any]]:
-        if type is None:
-            type = message['type']
-        private: bool = type == 'private'
+        if msg_type is None:
+            msg_type = message['type']
+        private: bool = msg_type == 'private'
 
         if to is None:
             to = message['sender_email'] if private else message['stream_id']
@@ -217,12 +211,12 @@ class Response:
                 to = to,
                 content = response
             )
-        else:
-            return new_stream_message(
-                stream = to,
-                subject = subject,
-                content = response
-            )
+
+        return new_stream_message(
+            stream = to,
+            subject = subject,
+            content = response
+        )
 
     @classmethod
     def build_reaction(
@@ -324,11 +318,11 @@ def new_stream_message(
     '''
     return (
         MessageType.MESSAGE,
-        dict(
-            type = 'stream',
-            to = stream,
-            subject = subject,
-            content = content
-        )
+        dict(**{
+            'type': 'stream',
+            'to': stream,
+            'subject': subject,
+            'content': content
+        })
     )
 

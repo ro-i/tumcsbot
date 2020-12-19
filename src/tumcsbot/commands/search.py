@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 import urllib.parse
 
 from typing import Any, Dict, Pattern, Tuple

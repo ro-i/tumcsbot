@@ -4,9 +4,8 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import logging
-import typing
 
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 from zulip import Client as ZulipClient
 
 

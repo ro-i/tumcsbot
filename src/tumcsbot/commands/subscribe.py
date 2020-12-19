@@ -3,12 +3,10 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import logging
 import re
-import typing
 
 from inspect import cleandoc
-from typing import Any, Dict, Optional, Pattern, Tuple
+from typing import Any, Dict, Match, Optional, Pattern, Tuple
 
 import tumcsbot.lib as lib
 import tumcsbot.command as command
@@ -57,7 +55,7 @@ class Command(command.CommandInteractive):
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 
-        match: Optional[typing.Match[Any]] = self._pattern.match(
+        match: Optional[Match[Any]] = self._pattern.match(
             message['command']
         )
         if match is None:
@@ -77,8 +75,8 @@ class Command(command.CommandInteractive):
             principals = subs['subscribers']
         )
 
-        if result['result'] == 'success':
-            return lib.Response.ok(message)
-        else:
+        if result['result'] != 'success':
             return self.err(message)
+
+        return lib.Response.ok(message)
 

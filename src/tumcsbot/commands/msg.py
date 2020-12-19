@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 
 from typing import Any, Dict, List, Match, Optional, Pattern, Sequence, Tuple, Union
 

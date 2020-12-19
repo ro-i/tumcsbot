@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
 
@@ -31,8 +30,8 @@ class Command(command.CommandInteractive):
     ) -> Tuple[str, Dict[str, Any]]:
         result: List[Tuple[Any, ...]] = self._db.execute('select * from SelfStats;')
         response: str = 'Command | Count | Since\n---- | ---- | ----'
-        for (command, count, since) in result:
+        for (cmd, count, since) in result:
             response += '\n{} | {} | {}'.format(
-                command, count, since
+                cmd, count, since
             )
         return lib.Response.build_message(message, response)

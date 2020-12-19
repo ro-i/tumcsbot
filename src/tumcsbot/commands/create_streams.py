@@ -4,7 +4,6 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import re
-import typing
 
 from typing import Any, Dict, List, Pattern, Tuple
 
@@ -73,5 +72,5 @@ class Command(command.CommandInteractive):
         return lib.Response.build_message(
             message,
             response,
-            type = 'private'
+            msg_type = 'private'
         )

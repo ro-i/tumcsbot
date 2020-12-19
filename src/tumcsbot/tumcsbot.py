@@ -4,14 +4,10 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import importlib
-import inspect
 import logging
 import os
-import re
-import typing
 
-from inspect import cleandoc
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .client import Client
 from . import lib
