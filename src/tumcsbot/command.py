@@ -103,7 +103,8 @@ class CommandInteractive(Command):
         event: Dict[str, Any]
     ) -> bool:
         return (
-            super().is_responsible(client, event)
-            and self._pattern.fullmatch(event['message']['content']) is not None
+            super().is_responsible(client, event) # ensure it's a message event
+            and event['message']['interactive'] # see tumcsbot message_preprocess()
+            and self._pattern.fullmatch(event['message']['command']) is not None
         )
 

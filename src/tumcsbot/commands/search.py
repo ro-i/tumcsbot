@@ -33,7 +33,7 @@ class Command(command.CommandInteractive):
     ) -> Tuple[str, Dict[str, Any]]:
         # get search string and quote it
         search: str = urllib.parse.quote(
-            self._pattern.match(message['content']).group(1), safe = ''
+            self._pattern.match(message['command']).group(1), safe = ''
         )
         # fix strange behavior of Zulip which does not accept literal periods
         search = search.replace('.', '%2E')

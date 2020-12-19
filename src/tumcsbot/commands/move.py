@@ -48,7 +48,7 @@ class Command(command.CommandInteractive):
         client.delete_message(message['id'])
 
         # get destination stream id
-        dest_stream: str = self._pattern.match(message['content']).group(1)
+        dest_stream: str = self._pattern.match(message['command']).group(1)
         result = client.get_stream_id(dest_stream)
         if result['result'] != 'success':
             return lib.Response.error(message)

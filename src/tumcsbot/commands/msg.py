@@ -65,10 +65,10 @@ class Command(command.CommandInteractive):
 
         # get command and parameters
         match: Optional[Match[str]] = (
-            self._pattern_store.match(message['content'])
-            or self._pattern_send.match(message['content'])
-            or self._pattern_delete.match(message['content'])
-            or self._pattern_list.match(message['content'])
+            self._pattern_store.match(message['command'])
+            or self._pattern_send.match(message['command'])
+            or self._pattern_delete.match(message['command'])
+            or self._pattern_list.match(message['command'])
         )
 
         if not match:

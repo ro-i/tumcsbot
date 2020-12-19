@@ -58,7 +58,7 @@ class Command(command.CommandInteractive):
             return lib.Response.admin_err(message)
 
         match: Optional[typing.Match[Any]] = self._pattern.match(
-            message['content']
+            message['command']
         )
         if match is None:
             return lib.Response.command_not_found(message)

@@ -113,33 +113,38 @@ class TumCSBot:
     def message_preprocess(
         self,
         message: Dict[str, Any]
-    ) -> bool:
+    ) -> None:
         '''
-        Check if the bot is responsible for this message, i.e. if it is
-        a private message to it or a message starting with mentioning
-        the bot. If the message starts with mentioning it, remove the
-        mention.
+        Check if the message is
+          - a private message to the bot.
+          - a message starting with mentioning the bot.
+        If those conditions are met, add "interactive = True" to the
+        message object and a "command" field containing the actual
+        command without the mention.
+        Rationale: instances of command.CommandInteractive are only
+        interested in messages to the bot.
         '''
+        interactive: bool = False
+
         if message['sender_id'] == self._client_id:
-            # reject message from the bot itself
-            return False
+            # message from the bot itself
+            pass
         elif message['content'].startswith(self._client_mention):
             # message starts with mentioning the bot; remove the mention
-            message['content'] = message['content'][self._client_mention_len:]
-            return True
+            message['command'] = message['content'][self._client_mention_len:]
+            interactive = True
         elif message['type'] == 'private':
             # private message to the bot (no mention needed)
-            return True
-        else:
-            return False
+            interactive = True
+
+        message['interactive'] = interactive
 
 
     def process_event(self, event: Dict[str, Any]) -> None:
         response: Optional[Tuple[str, Dict[str, Any]]] = None
 
-        if (event['type'] == 'message' and not
-                self.message_preprocess(event['message'])):
-            return
+        if event['type'] == 'message':
+            self.message_preprocess(event['message'])
 
         for command in self.commands:
             if command.is_responsible(self.client, event):
@@ -150,8 +155,13 @@ class TumCSBot:
                 )
                 break
 
-        if response is not None:
-            self.send_response(response)
+        if response is None:
+            if event['type'] == 'message' and event['message']['interactive']:
+                response = lib.Response.command_not_found(event['message'])
+            else:
+                return
+
+        self.send_response(response)
 
 
     def get_events_from_commands(self, commands: List[Command]) -> List[str]:

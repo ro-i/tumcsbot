@@ -39,7 +39,7 @@ class Command(command.CommandInteractive):
 
         failed: List[Tuple[str, str]] = []
 
-        for line in message['content'].split('\n')[1:]:
+        for line in message['command'].split('\n')[1:]:
             name: str
             description: str = ''
 
