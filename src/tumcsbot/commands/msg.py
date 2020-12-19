@@ -5,6 +5,7 @@
 
 import re
 
+from inspect import cleandoc
 from typing import Any, Dict, List, Match, Optional, Pattern, Sequence, Tuple, Union
 
 import tumcsbot.command as command
@@ -15,11 +16,16 @@ from tumcsbot.client import Client
 
 class Command(command.CommandInteractive):
     name: str = 'msg'
-    syntax: str = ('[Experimental] msg store <identifier>\\n<text> or '
+    syntax: str = ('msg store <identifier>\\n<text> or '
                    'msg send|delete <identifier> or '
                    'msg list')
-    description: str = ('store a message for later use, send or delete a '
-                        'stored message or list all stored messages')
+    description: str = cleandoc(
+        """
+        Store a message for later use, send or delete a stored message \
+        or list all stored messages.
+        [administrator rights needed]
+        """
+    )
     _search_sql: str = 'select m.Text from Messages m where m.Id = ? collate nocase'
     _update_sql: str = 'update Messages set Text = ? where Id = ? collate nocase'
     _insert_sql: str = 'insert into Messages values (?,?)'
@@ -56,7 +62,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         result: List[Tuple[Any, ...]]
 
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:

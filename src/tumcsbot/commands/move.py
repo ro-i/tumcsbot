@@ -5,6 +5,7 @@
 
 import re
 
+from inspect import cleandoc
 from typing import Any, Dict, Pattern, Tuple
 
 import tumcsbot.command as command
@@ -16,10 +17,12 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'move'
     syntax: str = 'move <destination stream>'
-    description: str = (
-        'move the current topic to `destination stream` and notify the creator '
-        'of the topic by a private message\n'
-        '**Note**: This works only if both streams are public!'
+    description: str = cleandoc(
+        """
+        Move the current topic to `destination stream` and notify the \
+        creator of the topic by a private message.
+        **Note**: This works only if both streams are public!
+        """
     )
     msg_template: str = (
         'Hi {}, I moved your topic "{}" to stream #**{}** because I think that '
@@ -37,7 +40,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         request: Dict[str, Any]
         result: Dict[str, Any]
 

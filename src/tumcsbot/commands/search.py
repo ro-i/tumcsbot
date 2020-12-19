@@ -17,7 +17,7 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'search'
     syntax: str = 'search <string>'
-    description: str = ('get a url to a search for "string" in all public streams')
+    description: str = 'Get a url to a search for "string" in all public streams.'
     msg_template: str = 'Hi, I hope that these search results may help you: {}'
     path: str = '#narrow/streams/public/search/'
 
@@ -29,7 +29,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         # get search string and quote it
         search: str = urllib.parse.quote(
             self._pattern.match(message['command']).group(1), safe = ''

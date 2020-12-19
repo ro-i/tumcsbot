@@ -3,6 +3,15 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
+"""TUM CS Bot - a generic Zulip bot.
+
+This bot is currently especially intended for administrative tasks.
+It supports several commands which can be written to the bot using
+a private message or a message starting with @mentioning the bot.
+
+This module contains the main class TumCSBot.
+"""
+
 import importlib
 import logging
 import os
@@ -15,11 +24,11 @@ from .command import Command, CommandInteractive
 
 
 class TumCSBot:
-    '''
-    This bot is currently especially intended for administrative tasks.
-    It supports several commands which can be written to the bot using
-    a private message or a message starting with @mentioning the bot.
-    '''
+    """Main Bot class.
+
+    Use start() to start the bot.
+    """
+
     _update_selfStats_sql = (
         'update SelfStats set Count = Count + 1 where Command = "{}"'
     )
@@ -61,16 +70,26 @@ class TumCSBot:
         # register events
         self.events: List[str] = self.get_events_from_commands(self.commands)
 
+    def event_callback(self, event: Dict[str, Any]) -> None:
+        """Simple callback wrapper for processing one event.
+
+        Catches all Exceptions and logs them.
+        """
+        logging.debug('Received event: ' + str(event))
+        try:
+            self.process_event(event)
+        except Exception as e:
+            logging.exception(e)
 
     def get_commands_from_path(self, path: List[str]) -> List[Command]:
-        '''
-        Load all plugins (= commands) from "path".
+        """Load all plugins (= commands) from "path".
+
         Pathes are relative here. All 'path' elements will be
         concatenated appropriately.
         Do not only receive the Command classes, but also their usage
         documentation string.client.get_profile()['user_id']:
         Prepare selfStats database entries.
-        '''
+        """
         commands: List[Command] = []
         docs: List[Tuple[str, str]] = []
 
@@ -105,12 +124,25 @@ class TumCSBot:
 
         return commands
 
+    def get_events_from_commands(self, commands: List[Command]) -> List[str]:
+        """Get all events to listen to from the commands.
+
+        Every command decides on its own which events it likes to receive.
+        """
+        events: Set[str] = set()
+
+        for command in commands:
+            for event in command.events:
+                events.add(event)
+
+        return list(events)
 
     def message_preprocess(
         self,
         message: Dict[str, Any]
     ) -> None:
-        '''
+        """Preprocess a message event.
+
         Check if the message is
           - a private message to the bot.
           - a message starting with mentioning the bot.
@@ -119,7 +151,7 @@ class TumCSBot:
         command without the mention.
         Rationale: instances of command.CommandInteractive are only
         interested in messages to the bot.
-        '''
+        """
         interactive: bool = False
 
         if message['sender_id'] == self._client_id:
@@ -136,8 +168,8 @@ class TumCSBot:
 
         message['interactive'] = interactive
 
-
     def process_event(self, event: Dict[str, Any]) -> None:
+        """Process one event."""
         response: Optional[Tuple[str, Dict[str, Any]]] = None
 
         if event['type'] == 'message':
@@ -160,29 +192,12 @@ class TumCSBot:
 
         self.send_response(response)
 
-
-    def get_events_from_commands(self, commands: List[Command]) -> List[str]:
-        '''
-        Every command decides on its own which events it likes to receive.
-        '''
-        events: Set[str] = set()
-
-        for command in commands:
-            for event in command.events:
-                events.add(event)
-
-        return list(events)
-
-
-    def run(self, event: Dict[str, Any]) -> None:
-        logging.debug('Received event: ' + str(event))
-        try:
-            self.process_event(event)
-        except Exception as e:
-            logging.exception(e)
-
-
     def send_response(self, response: Tuple[str, Dict[str, Any]]) -> None:
+        """Send a response to the Bot.
+
+        A response is a Tuple consisting of the type of the response
+        (an enum) and the actual content of the response.
+        """
         logging.debug('send_response: ' + str(response))
 
         if response[0] == lib.MessageType.MESSAGE:
@@ -190,10 +205,10 @@ class TumCSBot:
         elif response[0] == lib.MessageType.EMOJI:
             self.client.add_reaction(response[1])
 
-
     def start(self) -> None:
+        """Start the bot."""
         logging.debug('Listening on events: ' + str(self.events))
         self.client.call_on_each_event(
-            lambda event: self.run(event),
+            lambda event: self.event_callback(event),
             event_types = self.events
         )

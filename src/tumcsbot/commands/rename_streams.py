@@ -5,6 +5,7 @@
 
 import re
 
+from inspect import cleandoc
 from typing import Any, Dict, List, Pattern, Tuple
 
 import tumcsbot.command as command
@@ -16,10 +17,12 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'rename_streams'
     syntax: str = 'rename_streams\\n<stream_name_old>,<stream_name_new>\\n...'
-    description: str = (
-        'rename stream for every (stream_name_old,stream_name_new)-tuple '
-        'passed to this command (separated by newline)\n'
-        '[administrator rights needed]'
+    description: str = cleandoc(
+        """
+        Rename stream for every (`stream_name_old`,`stream_name_new`)-tuple \
+        passed to this command (separated by newline).
+        [administrator rights needed]
+        """
     )
 
     def __init__(self, **kwargs: Any) -> None:
@@ -32,7 +35,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 

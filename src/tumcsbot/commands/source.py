@@ -16,7 +16,7 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'source'
     syntax: str = 'source'
-    description: str = 'post the link to the repository of my source code'
+    description: str = 'Post the link to the repository of my source code.'
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(r'\s*source\s*', re.I)
@@ -26,7 +26,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         return lib.Response.build_message(
             message, 'https://github.com/ro-i/tumcsbot'
         )

@@ -5,6 +5,7 @@
 
 import re
 
+from inspect import cleandoc
 from typing import Any, Dict, List, Pattern, Tuple
 
 import tumcsbot.command as command
@@ -16,11 +17,13 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'create_streams'
     syntax: str = 'create_streams\\n<stream_name>,<stream_description>\\n...'
-    description: str = (
-        'create a public stream for every (stream,description)-tuple passed to this '
-        'command (separated by newline)\n'
-        '[administrator rights needed]'
-    )
+    description: str = cleandoc(
+        """
+        Create a public stream for every (stream,description)-tuple \
+        passed to this command (separated by a newline).
+        [administrator rights needed]
+        """
+        )
 
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str] = re.compile(
@@ -32,7 +35,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 

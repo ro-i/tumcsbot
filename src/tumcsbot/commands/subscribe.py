@@ -17,13 +17,15 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'subscribe'
     syntax: str = 'subscribe\\n<stream_name1>\\n<stream_name2[\\ndescription]'
-    description: str = (
-        'subscribe all subscribers of `stream_name1` to `stream_name2`; if '
-        '`stream_name2` does not exist yet, create it with the '
-        '(optional) description\n'
-        'The stream names may be of the form `#<stream_name>` or '
-        '`#**<stream_name>**` (autocompleted stream name).\n'
-        '[administrator rights needed]'
+    description: str = cleandoc(
+        """
+        Subscribe all subscribers of `stream_name1` to `stream_name2`.
+        If `stream_name2` does not exist yet, create it with the \
+        optional description.
+        The stream names may be of the form `#<stream_name>` or \
+        `#**<stream_name>**` (autocompleted stream name).
+        [administrator rights needed]
+        """
     )
     err_msg: str = cleandoc(
         '''
@@ -41,7 +43,7 @@ class Command(command.CommandInteractive):
             ), re.I
         )
 
-    def err(self, message: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def err(self, message: Dict[str, Any]) -> Tuple[lib.MessageType, Dict[str, Any]]:
         return lib.Response.build_message(
             message, type(self).err_msg.format(message['sender_full_name'])
         )
@@ -51,7 +53,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 

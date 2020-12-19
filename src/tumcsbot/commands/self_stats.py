@@ -16,7 +16,7 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'self_stats'
     syntax: str = 'self_stats'
-    description: str = 'get some statistics about the usage of this bot'
+    description: str = 'Get some statistics about the usage of this bot.'
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(r'\s*self_stats\s*', re.I)
@@ -27,7 +27,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         result: List[Tuple[Any, ...]] = self._db.execute('select * from SelfStats;')
         response: str = 'Command | Count | Since\n---- | ---- | ----'
         for (cmd, count, since) in result:

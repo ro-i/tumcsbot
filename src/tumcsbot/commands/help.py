@@ -16,7 +16,7 @@ from tumcsbot.client import Client
 class Command(command.CommandInteractive):
     name: str = 'help'
     syntax: str = 'help'
-    description: str = 'post this help as private message'
+    description: str = 'Post a help message to the requesting user.'
 
     def __init__(self, **kwargs: Any):
         self._pattern: Pattern[str] = re.compile(r'\s*help\s*', re.I)
@@ -26,7 +26,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
         return lib.Response.build_message(
             message,
             lib.Helper.get_help(user = message['sender_full_name']),
