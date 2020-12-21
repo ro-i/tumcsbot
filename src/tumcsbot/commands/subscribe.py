@@ -6,7 +6,7 @@
 import re
 
 from inspect import cleandoc
-from typing import Any, Dict, Match, Optional, Pattern, Tuple
+from typing import Any, Dict, List, Match, Optional, Pattern, Tuple, Union
 
 import tumcsbot.lib as lib
 import tumcsbot.command as command
@@ -43,7 +43,10 @@ class Command(command.CommandInteractive):
             ), re.I
         )
 
-    def err(self, message: Dict[str, Any]) -> Tuple[lib.MessageType, Dict[str, Any]]:
+    def err(
+        self,
+        message: Dict[str, Any]
+    ) -> Union[lib.Response, List[lib.Response]]:
         return lib.Response.build_message(
             message, type(self).err_msg.format(message['sender_full_name'])
         )
@@ -53,7 +56,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
+    ) -> Union[lib.Response, List[lib.Response]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
 

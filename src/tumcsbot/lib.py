@@ -19,6 +19,7 @@ new_private_message  Construct a new private message.
 new_stream_message   Construct a new stream message.
 """
 
+import logging
 import re
 import sqlite3 as sqlite
 
@@ -222,47 +223,85 @@ class Response:
     ok_emoji: str = 'ok'
     no_emoji: str = 'cross_mark'
 
+    def __init__(
+        self,
+        message_type: MessageType,
+        response: Dict[str, Any]
+    ) -> None:
+        self.message_type: MessageType = message_type
+        self.response: Dict[str, Any] = response
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def __str__(self) -> str:
+        return '({}, {})'.format(self.message_type, str(self.response))
+
+    def is_none(self) -> bool:
+        """Check whether this response has the MessageType 'None'."""
+        return self.message_type == MessageType.NONE
+
     @classmethod
     def build_message(
         cls,
-        message: Dict[str, Any],
-        response: str,
+        message: Optional[Dict[str, Any]],
+        content: str,
         msg_type: Optional[str] = None,
-        to: Optional[str] = None,
+        to: Optional[Union[str, int]] = None,
         subject: Optional[str] = None
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Build a message.
 
         Arguments:
         ----------
-        message    Message to respond to.
-        response   Content of the response.
+        message    The message to respond to.
+                       May be explicitely set to None. In this case,
+                       'msg_type', 'to' (and 'subject' if 'msg_type'
+                       is 'stream') have to be specified.
+        response   The content of the response.
         msg_type   Determine if the response should be a stream or a
-                   private message.
-        to         The recipients (private message) or the stream.
+                   private message. ('stream', 'private')
+                   [optional]
+        to         If it is a private message:
+                       Either a list containing integer user IDs
+                       or a list containing string email addresses.
+                   If it is a stream message:
+                       Either the name or the integer ID of a stream.
+                   [optional]
         subject    The topic the message should be added to (only for
-                   stream messages.
+                   stream messages).
+                   [optional]
+
+        The optional arguments are inferred from 'message' if provided.
+
+        Return a Response object.
         """
-        if msg_type is None:
-            msg_type = message['type']
-        private: bool = msg_type == 'private'
+        if message is None and (msg_type is None
+                                or to is None
+                                or (msg_type == 'stream' and subject is None)):
+            return cls.none()
 
-        if to is None:
-            to = message['sender_email'] if private else message['stream_id']
+        if message is not None:
+            if msg_type is None:
+                msg_type = message['type']
+            private: bool = msg_type == 'private'
 
-        if subject is None:
-            subject = message['subject'] if not private else ''
+            if to is None:
+                to = message['sender_email'] if private else message['stream_id']
 
-        if private:
-            return new_private_message(
-                to = to,
-                content = response
-            )
+            if subject is None:
+                subject = message['subject'] if not private else ''
 
-        return new_stream_message(
-            stream = to,
-            subject = subject,
-            content = response
+        # 'subject' field is ignored for private messages
+        # see https://zulip.com/api/send-message#parameter-topic
+        return cls(
+            MessageType.MESSAGE,
+            dict(**{
+                'type': msg_type,
+                'to': to,
+                'subject': subject,
+                'content': content
+            })
         )
 
     @classmethod
@@ -270,7 +309,7 @@ class Response:
         cls,
         message: Dict[str, Any],
         emoji: str
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Build a reaction response.
 
         Arguments:
@@ -278,7 +317,7 @@ class Response:
         message   The message to react on.
         emoji     The emoji to react with.
         """
-        return (
+        return cls(
             MessageType.EMOJI,
             dict(message_id = message['id'], emoji_name = emoji)
         )
@@ -286,7 +325,7 @@ class Response:
     @classmethod
     def admin_err(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """The user has not sufficient rights.
 
         Tell the user that they have not administrator rights. Relevant
@@ -300,7 +339,7 @@ class Response:
     @classmethod
     def command_not_found(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Tell the user that his command could not be found."""
         return cls.build_message(
             message,
@@ -310,7 +349,7 @@ class Response:
     @classmethod
     def error(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Tell the user that an error occurred."""
         return cls.build_message(
             message, cls.error_msg.format(message['sender_full_name'])
@@ -319,7 +358,7 @@ class Response:
     @classmethod
     def exception(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Tell the user that an exception occurred."""
         return cls.build_message(
             message, cls.exception_msg.format(message['sender_full_name'])
@@ -328,7 +367,7 @@ class Response:
     @classmethod
     def greet(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Greet the user."""
         return cls.build_message(
             message, cls.greet_msg.format(message['sender_full_name'])
@@ -337,64 +376,18 @@ class Response:
     @classmethod
     def ok(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Return an "ok"-reaction."""
         return cls.build_reaction(message, cls.ok_emoji)
 
     @classmethod
     def no(
         cls, message: Dict[str, Any]
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> 'Response':
         """Return a "no"-reaction."""
         return cls.build_reaction(message, cls.no_emoji)
 
     @classmethod
-    def none(cls) -> Tuple[MessageType, Dict[str, Any]]:
+    def none(cls) -> 'Response':
         """No response."""
-        return (MessageType.NONE, {})
-
-
-def new_private_message(
-    to: Union[str, int],
-    content: str
-) -> Tuple[MessageType, Dict[str, Any]]:
-    """Send a private message.
-
-    Arguments:
-    ----------
-    to        Either a list containing integer user IDs
-              or a list containing string email addresses.
-    content   The content of the message.
-    """
-    return (
-        MessageType.MESSAGE,
-        dict(
-            type = 'private',
-            to = to,
-            content = content
-        )
-    )
-
-
-def new_stream_message(
-    stream: Union[str, int],
-    subject: str,
-    content: str
-) -> Tuple[MessageType, Dict[str, Any]]:
-    """Send a stream message.
-
-    Arguments:
-    ----------
-    stream    Either the name or the integer ID of a stream.
-    subject   The topic to add the message to.
-    content   The content of the message.
-    """
-    return (
-        MessageType.MESSAGE,
-        dict(**{
-            'type': 'stream',
-            'to': stream,
-            'subject': subject,
-            'content': content
-        })
-    )
+        return cls(MessageType.NONE, {})

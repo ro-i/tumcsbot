@@ -5,7 +5,7 @@
 
 import re
 
-from typing import Any, Dict, List, Pattern, Tuple
+from typing import Any, Dict, List, Pattern, Tuple, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -27,7 +27,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
+    ) -> Union[lib.Response, List[lib.Response]]:
         result: List[Tuple[Any, ...]] = self._db.execute('select * from SelfStats;')
         response: str = 'Command | Count | Since\n---- | ---- | ----'
         for (cmd, count, since) in result:

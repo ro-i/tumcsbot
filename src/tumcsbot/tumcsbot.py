@@ -9,18 +9,81 @@ This bot is currently especially intended for administrative tasks.
 It supports several commands which can be written to the bot using
 a private message or a message starting with @mentioning the bot.
 
-This module contains the main class TumCSBot.
+This module contains the main class TumCSBot and a (hopefully
+temporary) helper class AutoSubscriber which subscribes the bot
+to all public streams periodically.
 """
 
 import importlib
 import logging
 import os
+import threading
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from time import sleep
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from .client import Client
 from . import lib
 from .command import Command, CommandInteractive
+
+
+class AutoSubscriber(threading.Thread):
+    """Keep the bot subscribed to all public streams.
+
+    As the 'all_public_streams' parameter of the event API [1] does not
+    seem to work properly, we need a work-around in order to be able to
+    receive eventy for all public streams.
+
+    [1] https://zulip.com/api/register-queue#parameter-all_public_streams
+    """
+
+    # interval in seconds to run periodically
+    interval: int = 1800
+
+    def __init__(self, client: Client) -> None:
+        """Override the constructor of the parent class."""
+        super().__init__()
+        self.daemon = True
+        self._client = client
+
+    def run(self) -> None:
+        """The thread's activity.
+
+        Override the method of the parent class threading.Thread.
+        """
+        while True:
+            try:
+                self.subscribe()
+            except Exception as e:
+                logging.exception(e)
+            sleep(AutoSubscriber.interval)
+
+    def subscribe(self) -> None:
+        """Do the actual subscribing."""
+        result: Dict[str, Any]
+
+        result = self._client.get_streams(
+            include_public = True,
+            include_web_public = True,
+            include_subscribed = False,
+            include_default = True
+        )
+        if result['result'] != 'success':
+            logging.warning(
+                'AutoSubscriber.run(): Cannot get list of all streams: '
+                + str(result)
+            )
+
+        streams: List[Dict[str, Any]] = [
+            { 'name': stream['name'] } for stream in result['streams']
+        ]
+
+        result = self._client.add_subscriptions(streams = streams)
+        if result['result'] != 'success':
+            logging.warning(
+                'AutoSubscriber.run(): Cannot subscribe to some streams: '
+                + str(result)
+            )
 
 
 class TumCSBot:
@@ -66,9 +129,15 @@ class TumCSBot:
         )
 
         # register plugins
-        self.commands: List[Command] = self.get_commands_from_path(['commands'])
+        (self.commands, self.commands_interactive) = \
+            self.get_commands_from_path(['commands'])
         # register events
         self.events: List[str] = self.get_events_from_commands(self.commands)
+        self.events.extend(self.get_events_from_commands(self.commands_interactive))
+
+        # start AutoSubscriber
+        self._auto_subscriber = AutoSubscriber(self.client)
+        self._auto_subscriber.start()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Simple callback wrapper for processing one event.
@@ -81,7 +150,10 @@ class TumCSBot:
         except Exception as e:
             logging.exception(e)
 
-    def get_commands_from_path(self, path: List[str]) -> List[Command]:
+    def get_commands_from_path(
+        self,
+        path: List[str]
+    ) -> Tuple[List[Command], List[CommandInteractive]]:
         """Load all plugins (= commands) from "path".
 
         Pathes are relative here. All 'path' elements will be
@@ -90,7 +162,7 @@ class TumCSBot:
         documentation string.client.get_profile()['user_id']:
         Prepare selfStats database entries.
         """
-        commands: List[Command] = []
+        commands: Tuple[List[Command], List[CommandInteractive]] = ([], [])
         docs: List[Tuple[str, str]] = []
 
         # directory path to our package ('path/to/package')
@@ -108,10 +180,12 @@ class TumCSBot:
                 '.'.join([module_path, module_name]), fromlist = ['Command']
             )
             command: Command = module.Command()
-            commands.append(command)
-            # collect usage information
+            # collect usage information and add to appropriate result list
             if isinstance(command, CommandInteractive):
                 docs.append(command.get_usage())
+                commands[1].append(command)
+            else:
+                commands[0].append(command)
             # check for corresponding row in database
             self._db.checkout_row(
                 table = 'selfStats',
@@ -124,7 +198,10 @@ class TumCSBot:
 
         return commands
 
-    def get_events_from_commands(self, commands: List[Command]) -> List[str]:
+    def get_events_from_commands(
+        self,
+        commands: Union[List[Command], List[CommandInteractive]]
+    ) -> List[str]:
         """Get all events to listen to from the commands.
 
         Every command decides on its own which events it likes to receive.
@@ -170,40 +247,56 @@ class TumCSBot:
 
     def process_event(self, event: Dict[str, Any]) -> None:
         """Process one event."""
-        response: Optional[Tuple[str, Dict[str, Any]]] = None
+        command_palette: Sequence[Union[Command, CommandInteractive]] = self.commands
+        interactive: bool = False
+        responses: List[lib.Response] = []
+        response: Union[lib.Response, List[lib.Response]]
 
+        # Check if the message contains a command for the bot, i.e.
+        # needs to be handled by an interactive command.
         if event['type'] == 'message':
             self.message_preprocess(event['message'])
+            if event['message']['interactive']:
+                command_palette = self.commands_interactive
+                interactive = True
 
-        for command in self.commands:
-            if command.is_responsible(self.client, event):
-                response = command.func(self.client, event)
-                self._db.execute(
-                    TumCSBot._update_selfStats_sql.format(command.name),
-                    commit = True
-                )
+        for command in command_palette:
+            if not command.is_responsible(self.client, event):
+                continue
+
+            response = command.func(self.client, event)
+            if isinstance(response, list):
+                responses.extend(response)
+            else:
+                responses.append(response)
+
+            # update self stats
+            self._db.execute(
+                TumCSBot._update_selfStats_sql.format(command.name),
+                commit = True
+            )
+
+            # allow only one interactive command
+            if interactive:
                 break
 
-        if response is None:
-            if event['type'] == 'message' and event['message']['interactive']:
-                response = lib.Response.command_not_found(event['message'])
-            else:
-                return
+        # Inform the user if no suitable command could be found.
+        # Only relevant for interactive commands.
+        if not responses and interactive:
+            responses.append(lib.Response.command_not_found(event['message']))
 
-        self.send_response(response)
+        if responses:
+            self.send_responses(responses)
 
-    def send_response(self, response: Tuple[str, Dict[str, Any]]) -> None:
-        """Send a response to the Bot.
+    def send_responses(self, responses: List[lib.Response]) -> None:
+        """Send the given responses."""
+        logging.debug('send_responses: ' + str(responses))
 
-        A response is a Tuple consisting of the type of the response
-        (an enum) and the actual content of the response.
-        """
-        logging.debug('send_response: ' + str(response))
-
-        if response[0] == lib.MessageType.MESSAGE:
-            self.client.send_message(response[1])
-        elif response[0] == lib.MessageType.EMOJI:
-            self.client.add_reaction(response[1])
+        for response in responses:
+            if response.message_type == lib.MessageType.MESSAGE:
+                self.client.send_message(response.response)
+            elif response.message_type == lib.MessageType.EMOJI:
+                self.client.add_reaction(response.response)
 
     def start(self) -> None:
         """Start the bot."""

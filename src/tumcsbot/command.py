@@ -16,10 +16,10 @@ CommandInteractive   Base class specifically intended for interactive
 import logging
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Pattern, Tuple
+from typing import Any, Dict, List, Pattern, Tuple, Union
 
 from tumcsbot.client import Client
-from tumcsbot.lib import MessageType
+from tumcsbot.lib import MessageType, Response
 
 
 class Command(ABC):
@@ -39,7 +39,7 @@ class Command(ABC):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> Union[Response, List[Response]]:
         """Do the work this command is designed for. (abstract method)
 
         Process the given event and return a tuple containing the type
@@ -79,7 +79,7 @@ class CommandInteractive(Command):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> Union[Response, List[Response]]:
         """Handle preprocessed message and do the actual work.
 
         This is an abstract method.
@@ -91,7 +91,7 @@ class CommandInteractive(Command):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[MessageType, Dict[str, Any]]:
+    ) -> Union[Response, List[Response]]:
         """Process message.
 
         Turn the given message event into a message object and call

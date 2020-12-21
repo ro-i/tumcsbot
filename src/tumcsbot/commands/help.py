@@ -5,7 +5,7 @@
 
 import re
 
-from typing import Any, Dict, Pattern, Tuple
+from typing import Any, Dict, List, Pattern, Tuple, Union
 
 import tumcsbot.lib as lib
 import tumcsbot.command as command
@@ -26,7 +26,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
+    ) -> Union[lib.Response, List[lib.Response]]:
         return lib.Response.build_message(
             message,
             lib.Helper.get_help(user = message['sender_full_name']),

@@ -62,7 +62,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Tuple[lib.MessageType, Dict[str, Any]]:
+    ) -> Union[lib.Response, List[lib.Response]]:
         result: List[Tuple[Any, ...]]
 
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
