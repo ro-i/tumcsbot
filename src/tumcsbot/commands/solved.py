@@ -19,7 +19,7 @@ class Command(command.Command):
     events: List[str] = ['reaction']
     solved_emoji_name: str = 'cowboy'
     msg_template: str = (
-        '[This answer]({}) has been marked as solution by @**{}**.'
+        '[This answer]({}) has been marked as solution by @_**{}**.'
     )
     # arguments: stream id, topic name, message id
     path: str = '#narrow/stream/{}/topic/{}/near/{}'
