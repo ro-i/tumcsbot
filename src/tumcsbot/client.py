@@ -19,6 +19,24 @@ from zulip import Client as ZulipClient
 class Client(ZulipClient):
     """Wrapper around zulip.Client."""
 
+    # TODO: client_gravater etc. for better performance?
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Override the constructor of the parent class.
+
+        Add an 'id' attribute which equals to get_profile()['user_id'].
+        """
+        super().__init__(*args, **kwargs)
+        self.id = self.get_profile()['user_id']
+
+    def get_messages(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Override zulip.Clien.get_messages.
+
+        Defaults to 'apply_markdown' = False.
+        """
+        request['apply_markdown'] = False
+        return super().get_messages(request)
+
     def register(
         self,
         event_types: Optional[Iterable[str]] = None,
