@@ -48,10 +48,12 @@ class Command(command.Command):
         result = client.get_messages({
             'anchor': event['message_id'],
             'num_before': 0,
-            'num_after': 0
+            'num_after': 0,
+            'narrow': [{'operator': 'streams', 'operand': 'public'}]
         })
         # nothing to do if the message could not be received or is private
         if (result['result'] != 'success'
+                or not result['found_anchor']
                 or result['messages'][0]['type'] == 'private'):
             return lib.Response.none()
         message: Dict[str, Any] = result['messages'][0]
