@@ -45,17 +45,18 @@ class Command(command.Command):
         **kwargs: Any
     ) -> Union[lib.Response, List[lib.Response]]:
         # try to get the message
-        result = client.get_messages({
-            'anchor': event['message_id'],
-            'num_before': 0,
-            'num_after': 0,
-            'narrow': [{'operator': 'streams', 'operand': 'public'}]
-        })
-        # nothing to do if the message could not be received or is private
+        result = self._get_message(client, event['message_id'])
+        if result['result'] != 'success':
+            return lib.Response.none()
+        if not result['found_anchor']:
+            # try again (message has been sent before the bot subscribed to
+            # the corresponding stream)
+            result = self._get_message(client, event['message_id'], True)
         if (result['result'] != 'success'
                 or not result['found_anchor']
                 or result['messages'][0]['type'] == 'private'):
             return lib.Response.none()
+
         message: Dict[str, Any] = result['messages'][0]
 
         # try to get the user who reacted on this message
@@ -83,3 +84,16 @@ class Command(command.Command):
             subject = message['subject'],
             content = Command.msg_template.format(url, user_name)
         )
+
+    def _get_message(
+        self,
+        client: Client,
+        message_id: int,
+        narrow: bool = False
+    ) -> Dict[str, Any]:
+        return client.get_messages({
+            'anchor': message_id,
+            'num_before': 0,
+            'num_after': 0,
+            'narrow': [{'operator': 'streams', 'operand': 'public'}] if narrow else []
+        })
