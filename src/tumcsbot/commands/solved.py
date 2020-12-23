@@ -119,8 +119,6 @@ class Command(command.Command):
         if public_streams:
             narrow = [{'operator': 'streams', 'operand': 'public'}]
 
-        logging.debug(message_id)
-
         return client.get_messages({
             'anchor': message_id,
             'num_before': 0,
