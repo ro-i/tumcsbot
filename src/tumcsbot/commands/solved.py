@@ -17,7 +17,7 @@ from tumcsbot.client import Client
 class Command(command.Command):
     name: str = 'solved'
     events: List[str] = ['reaction']
-    solved_emoji_name: str = 'cowboy'
+    solved_emoji_name: str = 'check'
     msg_template: str = (
         '[This answer]({}) has been marked as solution by @_**{}**.'
     )
