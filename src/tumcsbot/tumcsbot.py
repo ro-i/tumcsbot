@@ -17,73 +17,15 @@ to all public streams periodically.
 import importlib
 import logging
 import os
-import threading
 
-from time import sleep
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from .client import Client
 from . import lib
-from .command import Command, CommandInteractive
+from .command import Command, CommandDaemon, CommandInteractive, CommandOneShot
 
 
-class AutoSubscriber(threading.Thread):
-    """Keep the bot subscribed to all public streams.
-
-    As the 'all_public_streams' parameter of the event API [1] does not
-    seem to work properly, we need a work-around in order to be able to
-    receive eventy for all public streams.
-
-    [1] https://zulip.com/api/register-queue#parameter-all_public_streams
-    """
-
-    # interval in seconds to run periodically
-    interval: int = 1800
-
-    def __init__(self, client: Client) -> None:
-        """Override the constructor of the parent class."""
-        super().__init__()
-        self.daemon = True
-        self.__client = client
-
-    def run(self) -> None:
-        """The thread's activity.
-
-        Override the method of the parent class threading.Thread.
-        """
-        while True:
-            try:
-                self.subscribe()
-            except Exception as e:
-                logging.exception(e)
-            sleep(AutoSubscriber.interval)
-
-    def subscribe(self) -> None:
-        """Do the actual subscribing."""
-        result: Dict[str, Any]
-
-        result = self.__client.get_streams(
-            include_public = True,
-            include_web_public = True,
-            include_subscribed = False,
-            include_default = True
-        )
-        if result['result'] != 'success':
-            logging.warning(
-                'AutoSubscriber.run(): Cannot get list of all streams: '
-                + str(result)
-            )
-
-        streams: List[Dict[str, Any]] = [
-            { 'name': stream['name'] } for stream in result['streams']
-        ]
-
-        result = self.__client.add_subscriptions(streams = streams)
-        if result['result'] != 'success':
-            logging.warning(
-                'AutoSubscriber.run(): Cannot subscribe to some streams: '
-                + str(result)
-            )
+CommandType = Union[CommandDaemon, CommandInteractive, CommandOneShot]
 
 
 class TumCSBot:
@@ -104,39 +46,47 @@ class TumCSBot:
         logfile: Optional[str] = None,
         **kwargs: str
     ) -> None:
+        self.commands_daemon: List[CommandType]
+        self.commands_interactive: List[CommandType]
+        self.commands_oneshot: List[CommandType]
+
         if debug:
             logging.basicConfig(level = logging.DEBUG, filename = logfile)
         else:
             logging.basicConfig(filename = logfile)
 
-        # init Zulip client ...
+        # Init Zulip client ...
         self.client: Client = Client(config_file = zuliprc)
         # ... and already calculate some constants we need later in
-        # preprocess_and_check_if_responsible()
+        # preprocess_and_check_if_responsible().
         self._client_mention: str = '@**{}**'.format(
             self.client.get_profile()['full_name']
         )
         self._client_mention_len: int = len(self._client_mention)
-        # init database handler
+        # Init database handler.
         lib.DB.path = db_path
-        # get an own database connection
+        # Get an own database connection.
         self._db = lib.DB()
-        # check for database table
+        # Check for database table.
         self._db.checkout_table(
             table = 'selfStats',
             schema = '(Command varchar, Count integer, Since varchar)'
         )
 
-        # register plugins
-        (self.commands, self.commands_interactive) = \
-            self.get_commands_from_path(['commands'])
-        # register events
-        self.events: List[str] = self.get_events_from_commands(self.commands)
+        # Register plugins.
+        self.commands_daemon = self.get_commands_from_path(
+            ['commands'], CommandDaemon, **{'zuliprc': zuliprc}
+        )
+        # The daemon plugins need to have their own client.
+        self.commands_interactive = self.get_commands_from_path(
+            ['commands'], CommandInteractive
+        )
+        self.commands_oneshot = self.get_commands_from_path(
+            ['commands'], CommandOneShot
+        )
+        # Register events.
+        self.events: List[str] = self.get_events_from_commands(self.commands_oneshot)
         self.events.extend(self.get_events_from_commands(self.commands_interactive))
-
-        # start AutoSubscriber
-        self._auto_subscriber = AutoSubscriber(self.client)
-        self._auto_subscriber.start()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Simple callback wrapper for processing one event.
@@ -151,17 +101,24 @@ class TumCSBot:
 
     def get_commands_from_path(
         self,
-        path: List[str]
-    ) -> Tuple[List[Command], List[CommandInteractive]]:
+        path: List[str],
+        superclass: Any,
+        **kwargs: Any
+    ) -> List[CommandType]:
         """Load all plugins (= commands) from "path".
 
         Pathes are relative here. All 'path' elements will be
         concatenated appropriately.
-        Do not only receive the Command classes, but also their usage
-        documentation string.client.get_profile()['user_id']:
+        Load only those plugins which are subclasses of 'superclass'.
+        Pass 'kwargs' to the __init__ method of the plugins.
+
+        Do not only receive the Command objects, but also their usage
+        documentation string if they are subclasses of
+        CommandInteractive.
         Prepare selfStats database entries.
         """
-        commands: Tuple[List[Command], List[CommandInteractive]] = ([], [])
+        commands: List[CommandType] = []
+        command: CommandType
         docs: List[Tuple[str, str]] = []
 
         # directory path to our package ('path/to/package')
@@ -178,20 +135,26 @@ class TumCSBot:
             module = importlib.__import__(
                 '.'.join([module_path, module_name]), fromlist = ['Command']
             )
-            command: Command = module.Command()
-            # collect usage information and add to appropriate result list
-            if isinstance(command, CommandInteractive):
-                docs.append(command.get_usage())
-                commands[1].append(command)
-            else:
-                commands[0].append(command)
-            # check for corresponding row in database
-            self._db.checkout_row(
-                table = 'selfStats',
-                key_column = 'Command',
-                key = command.name,
-                default_values = '("{}", 0, date())'.format(command.name)
-            )
+            if not issubclass(module.Command, superclass):
+                continue
+            #if issubclass(module.Command, CommandDaemon):
+            #    command = module.Command(zuliprc = kwargs.pop('zuliprc'), **kwargs)
+            #else:
+            command = module.Command(**kwargs)
+            # Neither docs nor selfStats entries have to be prepared for
+            # daemon plugins.
+            if not isinstance(command, CommandDaemon):
+                # collect usage information and add to appropriate result list
+                if isinstance(command, CommandInteractive):
+                    docs.append(command.get_usage())
+                # check for corresponding row in database
+                self._db.checkout_row(
+                    table = 'selfStats',
+                    key_column = 'Command',
+                    key = command.name,
+                    default_values = '("{}", 0, date())'.format(command.name)
+                )
+            commands.append(command)
 
         lib.Helper.extend_command_docs(docs)
 
@@ -199,7 +162,7 @@ class TumCSBot:
 
     def get_events_from_commands(
         self,
-        commands: Union[List[Command], List[CommandInteractive]]
+        commands: List[CommandType]
     ) -> List[str]:
         """Get all events to listen to from the commands.
 
@@ -246,10 +209,11 @@ class TumCSBot:
 
     def process_event(self, event: Dict[str, Any]) -> None:
         """Process one event."""
-        command_palette: Sequence[Union[Command, CommandInteractive]] = self.commands
+        # Command palette defaults to the one-shot commands.
+        command_palette: List[CommandType] = self.commands_oneshot
+        # As a result, interactive is false.
         interactive: bool = False
-        responses: List[lib.Response] = []
-        response: Union[lib.Response, List[lib.Response]]
+        responses: List[Union[lib.Response, List[lib.Response]]] = []
 
         # Check if the message contains a command for the bot, i.e.
         # needs to be handled by an interactive command.
@@ -266,11 +230,7 @@ class TumCSBot:
             # As multiple commands may be executed for one event, catch
             # the exceptions of one command
             try:
-                response = command.func(self.client, event)
-                if isinstance(response, list):
-                    responses.extend(response)
-                else:
-                    responses.append(response)
+                responses.append(command.func(self.client, event))
 
                 # update self stats
                 self._db.execute(
@@ -278,7 +238,7 @@ class TumCSBot:
                     commit = True
                 )
             except Exception as e:
-                logging.debug(e)
+                logging.exception(e)
 
             # Allow only one interactive command.
             if interactive:
@@ -290,17 +250,7 @@ class TumCSBot:
             responses.append(lib.Response.command_not_found(event['message']))
 
         if responses:
-            self.send_responses(responses)
-
-    def send_responses(self, responses: List[lib.Response]) -> None:
-        """Send the given responses."""
-        logging.debug('send_responses: ' + str(responses))
-
-        for response in responses:
-            if response.message_type == lib.MessageType.MESSAGE:
-                self.client.send_message(response.response)
-            elif response.message_type == lib.MessageType.EMOJI:
-                self.client.add_reaction(response.response)
+            lib.send_responses(self.client, responses)
 
     def start(self) -> None:
         """Start the bot."""

@@ -14,7 +14,7 @@ import tumcsbot.lib as lib
 from tumcsbot.client import Client
 
 
-class Command(command.Command):
+class Command(command.CommandOneShot):
     name: str = 'solved'
     events: List[str] = ['reaction']
     solved_emoji_name: str = 'check'

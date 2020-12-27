@@ -17,13 +17,18 @@ import logging
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Pattern, Tuple, Union
+from threading import Thread
 
 from tumcsbot.client import Client
-from tumcsbot.lib import MessageType, Response
+from tumcsbot.lib import MessageType, Response, send_responses
 
 
 class Command(ABC):
-    """Generic command (plugin) base class."""
+    """Generic command (plugin) base class.
+
+    Do **not** directly inherit from this class!
+    Use one of its subclasses instead.
+    """
 
     name: str
     # Zulip events to listen to, see https://zulip.com/api/get-events
@@ -45,7 +50,6 @@ class Command(ABC):
         Process the given event and return a tuple containing the type
         of the response (see lib.MessageType) and the response itself.
         """
-        pass
 
     def is_responsible(
         self,
@@ -61,6 +65,59 @@ class Command(ABC):
         return event['type'] in type(self).events
 
 
+class CommandDaemon(Command):
+    """Base class for daemon plugins.
+
+    Those plugins have their own event queue and spawn a thread.
+    """
+
+    name: str
+    # Zulip events to listen to, see https://zulip.com/api/get-events
+    events: List[str]
+
+    @abstractmethod
+    def __init__(self, zuliprc: str, **kwargs: Any) -> None:
+        """Provide a default and incomplete __init__.
+
+        Must be used and completed by the subclasses.
+        Especially, they need to add 'self.thread.start()'.
+        """
+        # Get own client instance.
+        self.client: Client = Client(config_file = zuliprc)
+        # The 'daemon'-Argument is absolutely necessary, otherwise the
+        # threads will not terminate when the bot terminates.
+        # (TODO? There may be a better way to do this...)
+        self.thread = Thread(target = self.wait_for_event, daemon = True)
+
+    def wait_for_event(self) -> None:
+        logging.debug('Command {} is listening on events: {}'.format(
+            type(self).name, str(type(self).events)
+        ))
+        self.client.call_on_each_event(
+            lambda event: self.event_callback(event),
+            event_types = type(self).events
+        )
+
+    def event_callback(self, event: Dict[str, Any]) -> None:
+        logging.debug('Command {} received event: {}'.format(
+            type(self).name, str(event)
+        ))
+
+        try:
+            if self.is_responsible(self.client, event):
+                send_responses(self.client, self.func(self.client, event))
+        except Exception as e:
+            logging.exception(e)
+
+
+class CommandOneShot(Command):
+    """Base class for one-shot commands.
+
+    They are neither interactive nor daemon commands.
+    Currently, this class exists only for management purposes.
+    """
+
+
 class CommandInteractive(Command):
     """Base class for interactive commands."""
 
@@ -71,7 +128,6 @@ class CommandInteractive(Command):
     @abstractmethod
     def __init__(self, **kwargs: Any) -> None:
         self._pattern: Pattern[str]
-        pass
 
     @abstractmethod
     def handle_message(
@@ -84,7 +140,6 @@ class CommandInteractive(Command):
 
         This is an abstract method.
         """
-        pass
 
     def func(
         self,

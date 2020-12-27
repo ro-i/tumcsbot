@@ -32,13 +32,13 @@ class Client(ZulipClient):
         self.id = self.get_profile()['user_id']
         self.__stream_names: Dict[int, str] = {} # see self.get_stream_name()
 
-    def get_messages(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def get_messages(self, message_filters: Dict[str, Any]) -> Dict[str, Any]:
         """Override zulip.Client.get_messages.
 
         Defaults to 'apply_markdown' = False.
         """
-        request['apply_markdown'] = False
-        return super().get_messages(request)
+        message_filters['apply_markdown'] = False
+        return super().get_messages(message_filters)
 
     def get_profile(
         self,

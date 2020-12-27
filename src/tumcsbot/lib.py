@@ -15,8 +15,7 @@ Response     Provide Response building methods.
 
 Functions:
 ----------
-new_private_message  Construct a new private message.
-new_stream_message   Construct a new stream message.
+send_responses   Send a list of responses.
 """
 
 import logging
@@ -26,6 +25,8 @@ import sqlite3 as sqlite
 from enum import Enum
 from inspect import cleandoc
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+from .client import Client
 
 
 class StrEnum(str, Enum):
@@ -68,10 +69,14 @@ class DB:
 
     path: Optional[str] = None
 
-    def __init__(self) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the database connection.
+
+        *args and **kwargs are forwarded to sqlite.connect().
+        """
         if not DB.path:
             raise ValueError('no path to database given')
-        self.connection = sqlite.connect(DB.path)
+        self.connection = sqlite.connect(DB.path, *args, **kwargs)
         self.cursor = self.connection.cursor()
 
     def checkout_table(self, table: str, schema: str) -> None:
@@ -391,3 +396,27 @@ class Response:
     def none(cls) -> 'Response':
         """No response."""
         return cls(MessageType.NONE, {})
+
+
+def send_responses(
+    client: Client,
+    responses: Union[Response,
+                     List[Union[Response, List[Response]]],
+                     Union[Response, List[Response]]]
+) -> None:
+    """Send the given responses."""
+    def send_response(client: Client, response: Response) -> None:
+        """Send one single response."""
+        logging.debug('send_response: ' + str(responses))
+
+        if response.message_type == MessageType.MESSAGE:
+            client.send_message(response.response)
+        elif response.message_type == MessageType.EMOJI:
+            client.add_reaction(response.response)
+
+    if not isinstance(responses, list):
+        send_response(client, responses)
+        return
+
+    for response in responses:
+        send_responses(client, response)
