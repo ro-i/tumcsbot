@@ -60,7 +60,6 @@ class Client(ZulipClient):
         # Get a list of all active streams.
         result: Dict[str, Any] = self.get_streams(include_all_active = True)
         if result['result'] != 'success':
-            logging.debug(str(result))
             return None
         for stream in result['streams']:
             self.stream_names[stream['stream_id']] = stream['name']
