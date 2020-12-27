@@ -44,7 +44,7 @@ class AutoSubscriber(threading.Thread):
         """Override the constructor of the parent class."""
         super().__init__()
         self.daemon = True
-        self._client = client
+        self.__client = client
 
     def run(self) -> None:
         """The thread's activity.
@@ -62,7 +62,7 @@ class AutoSubscriber(threading.Thread):
         """Do the actual subscribing."""
         result: Dict[str, Any]
 
-        result = self._client.get_streams(
+        result = self.__client.get_streams(
             include_public = True,
             include_web_public = True,
             include_subscribed = False,
@@ -78,7 +78,7 @@ class AutoSubscriber(threading.Thread):
             { 'name': stream['name'] } for stream in result['streams']
         ]
 
-        result = self._client.add_subscriptions(streams = streams)
+        result = self.__client.add_subscriptions(streams = streams)
         if result['result'] != 'success':
             logging.warning(
                 'AutoSubscriber.run(): Cannot subscribe to some streams: '
@@ -113,7 +113,6 @@ class TumCSBot:
         self.client: Client = Client(config_file = zuliprc)
         # ... and already calculate some constants we need later in
         # preprocess_and_check_if_responsible()
-        self._client_id: int = self.client.get_profile()['user_id']
         self._client_mention: str = '@**{}**'.format(
             self.client.get_profile()['full_name']
         )
@@ -142,7 +141,7 @@ class TumCSBot:
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Simple callback wrapper for processing one event.
 
-        Catches all Exceptions and logs them.
+        Catch all Exceptions and logs them.
         """
         logging.debug('Received event: ' + str(event))
         try:
@@ -231,7 +230,7 @@ class TumCSBot:
         """
         interactive: bool = False
 
-        if message['sender_id'] == self._client_id:
+        if message['sender_id'] == self.client.id:
             # message from the bot itself
             pass
         elif message['content'].startswith(self._client_mention):
@@ -264,19 +263,24 @@ class TumCSBot:
             if not command.is_responsible(self.client, event):
                 continue
 
-            response = command.func(self.client, event)
-            if isinstance(response, list):
-                responses.extend(response)
-            else:
-                responses.append(response)
+            # As multiple commands may be executed for one event, catch
+            # the exceptions of one command
+            try:
+                response = command.func(self.client, event)
+                if isinstance(response, list):
+                    responses.extend(response)
+                else:
+                    responses.append(response)
 
-            # update self stats
-            self._db.execute(
-                TumCSBot._update_selfStats_sql.format(command.name),
-                commit = True
-            )
+                # update self stats
+                self._db.execute(
+                    TumCSBot._update_selfStats_sql.format(command.name),
+                    commit = True
+                )
+            except Exception as e:
+                logging.debug(e)
 
-            # allow only one interactive command
+            # Allow only one interactive command.
             if interactive:
                 break
 
