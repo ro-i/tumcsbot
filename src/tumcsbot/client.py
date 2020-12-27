@@ -28,6 +28,7 @@ class Client(ZulipClient):
         """
         super().__init__(*args, **kwargs)
         self.id = self.get_profile()['user_id']
+        self.stream_names: Dict[int, str] = {} # see self.get_stream_name()
 
     def get_messages(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Override zulip.Clien.get_messages.
@@ -36,6 +37,35 @@ class Client(ZulipClient):
         """
         request['apply_markdown'] = False
         return super().get_messages(request)
+
+    def get_stream_name(self, stream_id: int) -> Optional[str]:
+        """Get stream name for provided stream id.
+
+        Return the stream name as string or None if the stream name
+        could not be determined.
+        Cache the results in order to minimize the expensive requests.
+        """
+        def cache_lookup(stream_id: int) -> Optional[str]:
+            if stream_id in self.stream_names:
+                return self.stream_names[stream_id]
+            return None
+
+        # Check if the stream name is already in the cache.
+        stream_name: Optional[str] = cache_lookup(stream_id)
+        if stream_name is not None:
+            return stream_name
+
+        # If not, update cache.
+
+        # Get a list of all active streams.
+        result: Dict[str, Any] = self.get_streams(include_all_active = True)
+        if result['result'] != 'success':
+            logging.debug(str(result))
+            return None
+        for stream in result['streams']:
+            self.stream_names[stream['stream_id']] = stream['name']
+
+        return cache_lookup(stream_id)
 
     def register(
         self,
