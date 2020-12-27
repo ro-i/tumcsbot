@@ -6,7 +6,7 @@
 import re
 import urllib.parse
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -67,14 +67,9 @@ class Command(command.Command):
             return lib.Response.none()
         user_name: str = result['user']['full_name']
 
-        # Fix strange behavior of Zulip which does not accept literal periods.
-        topic: str = urllib.parse.quote(message['subject'], safe = '')\
-            .replace('.', '%2E')
-        # Get host url (removing trailing 'api/').
-        base_url: str = client.base_url[:-4]
-        # Build the full url.
-        url: str = base_url + Command.path.format(
-            message['stream_id'], topic, message['id']
+        # Build the link to the message.
+        url: str = self._build_url(
+            client, message['id'], message['subject'], message['stream_id']
         )
 
         # Build the message the bot might write.
@@ -108,8 +103,41 @@ class Command(command.Command):
 
         return lib.Response.none()
 
+    @classmethod
+    def _build_url(
+        cls,
+        client: Client,
+        message_id: int,
+        subject: str,
+        stream_id: int,
+    ) -> str:
+        """Build the url for accessing the message.
+
+        The url should link to the message embedded into the
+        corresponding topic view, i.e., the messages displayed around
+        the specific message should be those of the same topic.
+        """
+        # Fix strange behavior of Zulip which does not accept literal periods.
+        topic: str = urllib.parse.quote(subject, safe = '').replace('.', '%2E')
+
+        # Stream representation defaults to the stream id.
+        stream: str = str(stream_id)
+        # If possible, get also the stream name. (Otherwise, the link will not
+        # work on the Zulip iOS App.)
+        stream_name: Optional[str] = client.get_stream_name(stream_id)
+        if stream_name is not None:
+            stream += '-' + urllib.parse.quote(stream_name, safe = '')\
+                .replace('.', '%2E')
+
+        # Get host url (removing trailing 'api/').
+        base_url: str = client.base_url[:-4]
+
+        # Build the full url.
+        return base_url + cls.path.format(stream, topic, message_id)
+
+    @classmethod
     def _get_message(
-        self,
+        cls,
         client: Client,
         message_id: int,
         public_streams: bool = False
@@ -126,8 +154,9 @@ class Command(command.Command):
             'narrow': narrow
         })
 
+    @classmethod
     def _search_bot_message(
-        self,
+        cls,
         client: Client,
         message: Dict[str, Any],
     ) -> Dict[str, Any]:
