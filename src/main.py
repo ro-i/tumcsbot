@@ -3,6 +3,13 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
+"""TUM CS Bot - a generic Zulip bot.
+
+This bot is currently especially intended for administrative tasks.
+It supports several commands which can be written to the bot using
+a private message or a message starting with @mentioning the bot.
+"""
+
 import argparse
 
 from tumcsbot.tumcsbot import TumCSBot
@@ -10,7 +17,7 @@ from tumcsbot.tumcsbot import TumCSBot
 
 def main() -> None:
     argument_parser = argparse.ArgumentParser(
-        description = TumCSBot.__doc__,
+        description = __doc__,
         formatter_class = argparse.RawTextHelpFormatter
     )
     argument_parser.add_argument(
@@ -19,7 +26,7 @@ def main() -> None:
     )
     argument_parser.add_argument(
         'db_path', metavar = 'DB_PATH', nargs = 1,
-        help = 'path to bot\'s database'
+        help = 'path to the bot\'s database'
     )
     argument_parser.add_argument(
         '-d', '--debug', action = 'store_true',
