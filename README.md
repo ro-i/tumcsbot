@@ -16,13 +16,14 @@ bot is intended to run as `Generic` bot, owned by an administrator.
 - [add a bot](https://zulipchat.com/help/add-a-bot-or-integration)
 - [about bots](https://zulipchat.com/help/bots-and-integrations)
 
-Note: If you like the command `subscribe` to work even if the destination stream
-does not yet exist (so that the bot needs to create the stream), the bot needs
-administrator rights
-([documentation](https://github.com/zulip/zulip/blob/master/docs/production/security-model.md)).
+Note: For some commands such as `subscribe` or `solved` the bot needs
+administrator and `api_super_user` rights.
+([documentation for Zulip 3.x](https://github.com/zulip/zulip/blob/3.x/docs/production/security-model.md)).
 In order to grant those rights, run
-`manage.py knight --for-real --permission=administer <bot_email>` in the appropriate
-directory of your zulip server installation.
+- `manage.py knight --for-real --permission=administer <bot_email>` (Zulip <= 3.2)
+- `manage.py change_user_role -r REALM_ID <bot_email> admin` and
+  `manage.py change_user_role -r REALM_ID <bot_email> administrator`
+in the appropriate directory of your zulip server installation.
 
 
 usage
@@ -35,7 +36,9 @@ usage
 
 You can also run the bot manually:
 ```
-usage: tumcsbot.py [-h] [-d] [-l LOGFILE] ZULIPRC
+usage: main.py [-h] [-d] [-l LOGFILE] ZULIPRC DB_PATH
+
+TUM CS Bot - a generic Zulip bot.
 
 This bot is currently especially intended for administrative tasks.
 It supports several commands which can be written to the bot using
@@ -43,6 +46,7 @@ a private message or a message starting with @mentioning the bot.
 
 positional arguments:
   ZULIPRC               zuliprc file containing the bot's configuration
+  DB_PATH               path to the bot's database
 
 optional arguments:
   -h, --help            show this help message and exit
