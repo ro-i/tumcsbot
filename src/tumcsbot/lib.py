@@ -22,9 +22,10 @@ import logging
 import re
 import sqlite3 as sqlite
 
+from collections.abc import Iterable
 from enum import Enum
 from inspect import cleandoc
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from .client import Client
 
@@ -401,8 +402,8 @@ class Response:
 def send_responses(
     client: Client,
     responses: Union[Response,
-                     List[Union[Response, List[Response]]],
-                     Union[Response, List[Response]]]
+                     Iterable[Union[Response, Iterable[Response]]],
+                     Union[Response, Iterable[Response]]]
 ) -> None:
     """Send the given responses."""
     def send_response(client: Client, response: Response) -> None:
@@ -414,7 +415,7 @@ def send_responses(
         elif response.message_type == MessageType.EMOJI:
             client.add_reaction(response.response)
 
-    if not isinstance(responses, list):
+    if not isinstance(responses, Iterable):
         send_response(client, responses)
         return
 

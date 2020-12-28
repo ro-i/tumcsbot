@@ -5,7 +5,7 @@
 
 import urllib.parse
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -43,7 +43,7 @@ class Command(command.CommandOneShot):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
         # Try to get the message.
         result = self._get_message(client, event['message_id'])
         if result['result'] != 'success':

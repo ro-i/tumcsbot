@@ -17,7 +17,7 @@ import logging
 import multiprocessing
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Pattern, Tuple, Union
+from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 from tumcsbot.client import Client
 from tumcsbot.lib import Response, send_responses
@@ -44,7 +44,7 @@ class Command(ABC):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[Response, List[Response]]:
+    ) -> Union[Response, Iterable[Response]]:
         """Do the work this command is designed for. (abstract method)
 
         Process the given event and return a tuple containing the type
@@ -145,7 +145,7 @@ class CommandInteractive(Command):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[Response, List[Response]]:
+    ) -> Union[Response, Iterable[Response]]:
         """Handle preprocessed message and do the actual work.
 
         This is an abstract method.
@@ -156,7 +156,7 @@ class CommandInteractive(Command):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[Response, List[Response]]:
+    ) -> Union[Response, Iterable[Response]]:
         """Process message.
 
         Turn the given message event into a message object and call

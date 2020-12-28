@@ -13,7 +13,7 @@ receive eventy for all public streams.
 """
 
 from time import sleep
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Iterable, List, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -54,7 +54,7 @@ class Command(command.CommandDaemon):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
         """Do the actual subscribing."""
         result: Dict[str, Any]
 

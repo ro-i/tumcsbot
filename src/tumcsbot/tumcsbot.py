@@ -20,7 +20,7 @@ import logging
 import os
 import signal
 
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from .client import Client
 from . import lib
@@ -230,7 +230,7 @@ class TumCSBot:
         command_palette: List[CommandType] = self.commands_oneshot
         # As a result, interactive is false.
         interactive: bool = False
-        responses: List[Union[lib.Response, List[lib.Response]]] = []
+        responses: List[Union[lib.Response, Iterable[lib.Response]]] = []
 
         # Check if the message contains a command for the bot, i.e.
         # needs to be handled by an interactive command.

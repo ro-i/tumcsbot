@@ -6,7 +6,7 @@
 import re
 import urllib.parse
 
-from typing import Any, Dict, List, Pattern, Tuple, Union
+from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -30,7 +30,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
         # get search string and quote it
         search: str = urllib.parse.quote(
             self._pattern.match(message['command']).group(1), safe = ''

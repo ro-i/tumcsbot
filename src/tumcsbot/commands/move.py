@@ -6,7 +6,7 @@
 import re
 
 from inspect import cleandoc
-from typing import Any, Dict, List, Pattern, Tuple, Union
+from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -41,7 +41,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
         request: Dict[str, Any]
         result: Dict[str, Any]
 
