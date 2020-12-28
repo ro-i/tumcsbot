@@ -64,11 +64,6 @@ class Command(ABC):
         logging.debug('Command.is_responsible: ' + str(event))
         return event['type'] in type(self).events
 
-    def start(self) -> None:
-        """Executed after initialization.
-
-        Only for compatibility reasons and maybe future changes.
-        """
 
 class CommandDaemon(Command, multiprocessing.Process):
     """Base class for daemon plugins, a separate Process.
@@ -83,6 +78,10 @@ class CommandDaemon(Command, multiprocessing.Process):
 
     @abstractmethod
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
+        """Default __init__.
+
+        Implementing classes have to add at least `self.start()`.
+        """
         Command.__init__(self)
         # The 'daemon'-Argument is absolutely necessary, otherwise the
         # processes will not terminate when the bot terminates.

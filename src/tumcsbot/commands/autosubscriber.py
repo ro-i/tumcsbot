@@ -30,6 +30,7 @@ class Command(command.CommandDaemon):
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         """Complete the constructor of the parent class."""
         super().__init__(zuliprc)
+        self.start()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Override CommandDaemon.event_callback."""

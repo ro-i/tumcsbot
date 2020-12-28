@@ -21,7 +21,7 @@ from tumcsbot.client import Client
 class Command(command.CommandDaemon):
     name: str = 'alert_word_daemon'
     events: List[str] = ['message']
-    _search_sql: str = 'select Emoji from Alerts where Phrase like ?'
+    _search_sql: str = 'select * from Alerts'
 
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         """Complete the constructor of the parent class."""
@@ -33,6 +33,7 @@ class Command(command.CommandDaemon):
             table = 'Alerts',
             schema = '(Phrase varchar, Emoji varchar)'
         )
+        self.start()
 
     def is_responsible(
         self,
@@ -52,9 +53,11 @@ class Command(command.CommandDaemon):
         **kwargs: Any
     ) -> Union[lib.Response, List[lib.Response]]:
         responses: List[lib.Response] = []
-        query: str = '%{}%'.format(event['message']['content'])
+        content: str = event['message']['content']
 
-        for (emoji,) in self.db.execute(Command._search_sql, query):
+        for (phrase, emoji) in self.db.execute(Command._search_sql):
+            if phrase not in content:
+                continue
             responses.append(lib.Response.build_reaction(
                 message = event['message'], emoji = emoji
             ))
