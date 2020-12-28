@@ -14,6 +14,7 @@ temporary) helper class AutoSubscriber which subscribes the bot
 to all public streams periodically.
 """
 
+import atexit
 import importlib
 import logging
 import os
@@ -46,9 +47,12 @@ class TumCSBot:
         logfile: Optional[str] = None,
         **kwargs: str
     ) -> None:
-        self.commands_daemon: List[CommandType]
-        self.commands_interactive: List[CommandType]
-        self.commands_oneshot: List[CommandType]
+        self.commands_daemon: List[CommandType] = []
+        self.commands_interactive: List[CommandType] = []
+        self.commands_oneshot: List[CommandType] = []
+
+        # Register exit handler.
+        atexit.register(self.exit_handler)
 
         # Init logging.
         if debug:
@@ -88,6 +92,12 @@ class TumCSBot:
         # Register events.
         self.events: List[str] = self.get_events_from_commands(self.commands_oneshot)
         self.events.extend(self.get_events_from_commands(self.commands_interactive))
+
+    def exit_handler(self) -> None:
+        for process in self.commands_daemon:
+            if not process.is_alive():
+                continue
+            process.terminate()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Simple callback wrapper for processing one event.
