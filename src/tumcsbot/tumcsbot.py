@@ -18,6 +18,7 @@ import atexit
 import importlib
 import logging
 import os
+import signal
 
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -27,6 +28,10 @@ from .command import Command, CommandDaemon, CommandInteractive, CommandOneShot
 
 
 CommandType = Union[CommandDaemon, CommandInteractive, CommandOneShot]
+
+
+def sigterm_handler(signum: int, frame: Any) -> None:
+    raise SystemExit()
 
 
 class TumCSBot:
@@ -53,6 +58,7 @@ class TumCSBot:
 
         # Register exit handler.
         atexit.register(self.exit_handler)
+        signal.signal(signal.SIGTERM, sigterm_handler)
 
         # Init logging.
         if debug:
