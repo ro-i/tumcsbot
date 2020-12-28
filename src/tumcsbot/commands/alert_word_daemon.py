@@ -21,7 +21,7 @@ from tumcsbot.client import Client
 class Command(command.CommandDaemon):
     name: str = 'alert_word_daemon'
     events: List[str] = ['message']
-    _search_sql: str = 'select * from Alerts'
+    _search_sql: str = 'select Emoji from Alerts where instr(?, Phrase)'
 
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         super().__init__(zuliprc)
@@ -51,11 +51,9 @@ class Command(command.CommandDaemon):
         **kwargs: Any
     ) -> Union[lib.Response, List[lib.Response]]:
         responses: List[lib.Response] = []
-        content: str = event['message']['content']
+        query: str = event['message']['content'].lower()
 
-        for (phrase, emoji) in self.db.execute(Command._search_sql):
-            if phrase not in content:
-                continue
+        for (emoji, ) in self.db.execute(Command._search_sql, query):
             responses.append(lib.Response.build_reaction(
                 message = event['message'], emoji = emoji
             ))

@@ -110,7 +110,7 @@ class Command(command.CommandInteractive):
             return lib.Response.build_message(message, response)
 
         # search for identifier in database table
-        alert_phrase: str = args[1].strip()
+        alert_phrase: str = args[1].strip().lower()
         result_sql = self._db.execute(Command._search_sql, alert_phrase)
 
         if args[0] == 'add':
