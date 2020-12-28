@@ -50,6 +50,7 @@ class TumCSBot:
         self.commands_interactive: List[CommandType]
         self.commands_oneshot: List[CommandType]
 
+        # Init logging.
         if debug:
             logging.basicConfig(level = logging.DEBUG, filename = logfile)
         else:
@@ -137,9 +138,6 @@ class TumCSBot:
             )
             if not issubclass(module.Command, superclass):
                 continue
-            #if issubclass(module.Command, CommandDaemon):
-            #    command = module.Command(zuliprc = kwargs.pop('zuliprc'), **kwargs)
-            #else:
             command = module.Command(**kwargs)
             # Neither docs nor selfStats entries have to be prepared for
             # daemon plugins.
@@ -155,6 +153,8 @@ class TumCSBot:
                     default_values = '("{}", 0, date())'.format(command.name)
                 )
             commands.append(command)
+            # Start plugin.
+            command.start()
 
         lib.Helper.extend_command_docs(docs)
 

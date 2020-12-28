@@ -3,10 +3,9 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import re
 import urllib.parse
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -26,7 +25,7 @@ class Command(command.CommandOneShot):
     path: str = '#narrow/stream/{}/topic/{}/near/{}'
 
     def __init__(self, **kwargs: Any) -> None:
-        pass
+        super().__init__()
 
     def is_responsible(
         self,

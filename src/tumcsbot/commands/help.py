@@ -19,6 +19,7 @@ class Command(command.CommandInteractive):
     description: str = 'Post a help message to the requesting user.'
 
     def __init__(self, **kwargs: Any):
+        super().__init__()
         self._pattern: Pattern[str] = re.compile(r'\s*help\s*', re.I)
 
     def handle_message(

@@ -19,6 +19,7 @@ class Command(command.CommandInteractive):
     description: str = 'Post the link to the repository of my source code.'
 
     def __init__(self, **kwargs: Any):
+        super().__init__()
         self._pattern: Pattern[str] = re.compile(r'\s*source\s*', re.I)
 
     def handle_message(

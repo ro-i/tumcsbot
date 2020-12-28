@@ -26,6 +26,7 @@ class Command(command.CommandInteractive):
     )
 
     def __init__(self, **kwargs: Any) -> None:
+        super().__init__()
         self._pattern: Pattern[str] = re.compile(
             r'\s*rename_streams\s*.+', re.I | re.DOTALL
         )

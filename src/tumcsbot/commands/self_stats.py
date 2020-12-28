@@ -19,6 +19,7 @@ class Command(command.CommandInteractive):
     description: str = 'Get some statistics about the usage of this bot.'
 
     def __init__(self, **kwargs: Any):
+        super().__init__()
         self._pattern: Pattern[str] = re.compile(r'\s*self_stats\s*', re.I)
         self._db: lib.DB = lib.DB()
 

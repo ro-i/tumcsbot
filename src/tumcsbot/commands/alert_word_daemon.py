@@ -21,19 +21,18 @@ from tumcsbot.client import Client
 class Command(command.CommandDaemon):
     name: str = 'alert_word_daemon'
     events: List[str] = ['message']
-    _select_sql: str = 'select * from Alerts'
+    _search_sql: str = 'select Emoji from Alerts where Phrase like ?'
 
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         """Complete the constructor of the parent class."""
         super().__init__(zuliprc)
         # get own database connection
-        self._db = lib.DB(check_same_thread = False)
+        self.db = lib.DB(check_same_thread = False)
         # check for database table
-        self._db.checkout_table(
+        self.db.checkout_table(
             table = 'Alerts',
             schema = '(Phrase varchar, Emoji varchar)'
         )
-        self.thread.start()
 
     def is_responsible(
         self,
@@ -41,11 +40,10 @@ class Command(command.CommandDaemon):
         event: Dict[str, Any]
     ) -> bool:
         # 'flags' and 'has_alert_word' implies that the event is a message.
-        # Do not react on own messages or private messages.
+        # Do not react on own messages.
         return ('flags' in event
                 and 'has_alert_word' in event['flags']
-                and event['message']['sender_id'] != client.id
-                and event['message']['type'] != private)
+                and event['message']['sender_id'] != client.id)
 
     def func(
         self,
@@ -54,12 +52,9 @@ class Command(command.CommandDaemon):
         **kwargs: Any
     ) -> Union[lib.Response, List[lib.Response]]:
         responses: List[lib.Response] = []
-        message: Dict[str, Any] = event['message']
-        content: str = message['content']
+        query: str = '%{}%'.format(event['message']['content'])
 
-        for (phrase, emoji) in self._db.execute(Command._select_sql):
-            if phrase not in content:
-                continue
+        for (emoji,) in self.db.execute(Command._search_sql, query):
             responses.append(lib.Response.build_reaction(
                 message = event['message'], emoji = emoji
             ))

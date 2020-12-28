@@ -16,8 +16,8 @@ from tumcsbot.client import Client
 
 class Command(command.CommandInteractive):
     name: str = 'msg'
-    syntax: str = ('msg store <identifier>\\n<text> or '
-                   'msg send|delete <identifier> or '
+    syntax: str = ('msg add <identifier>\\n<text> or '
+                   'msg send|remove <identifier> or '
                    'msg list')
     description: str = cleandoc(
         """
@@ -33,18 +33,19 @@ class Command(command.CommandInteractive):
     _list_sql: str = 'select * from Messages'
 
     def __init__(self, **kwargs: Any):
+        super().__init__()
         self._pattern: Pattern[str] = re.compile(
             r'\s*msg\s*(?:store *[^\n]+\n.+|send *[^\n]+|delete *[^\n]+|list\s*)',
             re.I | re.DOTALL
         )
-        self._pattern_store: Pattern[str] = re.compile(
-            r'\s*msg\s*(store) *([^\n]+)\n(.+)', re.I | re.DOTALL
+        self._pattern_add: Pattern[str] = re.compile(
+            r'\s*msg\s*(add) *([^\n]+)\n(.+)', re.I | re.DOTALL
         )
         self._pattern_send: Pattern[str] = re.compile(
             r'\s*msg\s*(send) *(.+)', re.I
         )
-        self._pattern_delete: Pattern[str] = re.compile(
-            r'\s*msg\s*(delete) *(.+)', re.I
+        self._pattern_remove: Pattern[str] = re.compile(
+            r'\s*msg\s*(remove) *(.+)', re.I
         )
         self._pattern_list: Pattern[str] = re.compile(
             r'\s*msg\s*(list)\s*', re.I
@@ -70,9 +71,9 @@ class Command(command.CommandInteractive):
 
         # get command and parameters
         match: Optional[Match[str]] = (
-            self._pattern_store.match(message['command'])
+            self._pattern_add.match(message['command'])
             or self._pattern_send.match(message['command'])
-            or self._pattern_delete.match(message['command'])
+            or self._pattern_remove.match(message['command'])
             or self._pattern_list.match(message['command'])
         )
 
@@ -88,7 +89,8 @@ class Command(command.CommandInteractive):
             return lib.Response.build_message(message, response)
 
         # search for identifier in database table
-        result = self._db.execute(Command._search_sql, args[1].strip())
+        ident = args[1].strip()
+        result = self._db.execute(Command._search_sql, ident)
 
         if args[0] == 'send':
             if not result:
@@ -96,18 +98,16 @@ class Command(command.CommandInteractive):
             # remove requesting message
             client.delete_message(message['id'])
             return lib.Response.build_message(message, result[0][0])
-        elif args[0] == 'store':
+        elif args[0] == 'add':
             if result:
-                self._db.execute(
-                    Command._update_sql, args[2], args[1].strip(), commit = True
-                )
+                self._db.execute(Command._update_sql, args[2], ident, commit = True)
             else:
-                self._db.execute(
-                    Command._insert_sql, args[1].strip(), args[2], commit = True
-                )
-        elif args[0] == 'delete':
+                self._db.execute(Command._insert_sql, ident, args[2], commit = True)
+        elif args[0] == 'remove':
             if not result:
                 return lib.Response.no(message)
-            self._db.execute(Command._delete_sql, args[1].strip(), commit = True)
+            self._db.execute(Command._delete_sql, ident, commit = True)
+        else:
+            return lib.Response.no(message)
 
         return lib.Response.ok(message)

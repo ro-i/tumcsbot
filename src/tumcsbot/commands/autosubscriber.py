@@ -12,9 +12,6 @@ receive eventy for all public streams.
 [1] https://zulip.com/api/register-queue#parameter-all_public_streams
 """
 
-import logging
-import threading
-
 from time import sleep
 from typing import Any, Dict, List, Union
 
@@ -33,14 +30,13 @@ class Command(command.CommandDaemon):
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         """Complete the constructor of the parent class."""
         super().__init__(zuliprc)
-        self.thread.start()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Override CommandDaemon.event_callback."""
         try:
             self.func(self.client, event)
         except Exception as e:
-            logging.exception(e)
+            self.logger.exception(e)
 
     def wait_for_event(self) -> None:
         """Override CommandDaemon.wait_for_event.
@@ -51,7 +47,7 @@ class Command(command.CommandDaemon):
             try:
                 self.event_callback({})
             except Exception as e:
-                logging.exception(e)
+                self.logger.exception(e)
             sleep(type(self).interval)
 
     def func (
@@ -70,7 +66,7 @@ class Command(command.CommandDaemon):
             include_default = True
         )
         if result['result'] != 'success':
-            logging.warning(
+            self.logger.warning(
                 'AutoSubscriber.run(): Cannot get list of all streams: '
                 + str(result)
             )
@@ -81,7 +77,7 @@ class Command(command.CommandDaemon):
 
         result = client.add_subscriptions(streams = streams)
         if result['result'] != 'success':
-            logging.warning(
+            self.logger.warning(
                 'AutoSubscriber.run(): Cannot subscribe to some streams: '
                 + str(result)
             )

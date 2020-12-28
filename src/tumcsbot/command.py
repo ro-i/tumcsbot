@@ -14,13 +14,13 @@ CommandInteractive   Base class specifically intended for interactive
 """
 
 import logging
+import multiprocessing
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Pattern, Tuple, Union
-from threading import Thread
 
 from tumcsbot.client import Client
-from tumcsbot.lib import MessageType, Response, send_responses
+from tumcsbot.lib import Response, send_responses
 
 
 class Command(ABC):
@@ -64,11 +64,17 @@ class Command(ABC):
         logging.debug('Command.is_responsible: ' + str(event))
         return event['type'] in type(self).events
 
+    def start(self) -> None:
+        """Executed after initialization.
 
-class CommandDaemon(Command):
-    """Base class for daemon plugins.
+        Only for compatibility reasons and maybe future changes.
+        """
 
-    Those plugins have their own event queue and spawn a thread.
+class CommandDaemon(Command, multiprocessing.Process):
+    """Base class for daemon plugins, a separate Process.
+
+    Those plugins have their own process, client and event queue.
+    They are a kind of "sub-bot".
     """
 
     name: str
@@ -77,20 +83,21 @@ class CommandDaemon(Command):
 
     @abstractmethod
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
-        """Provide a default and incomplete __init__.
-
-        Must be used and completed by the subclasses.
-        Especially, they need to add 'self.thread.start()'.
-        """
-        # Get own client instance.
-        self.client: Client = Client(config_file = zuliprc)
+        Command.__init__(self)
         # The 'daemon'-Argument is absolutely necessary, otherwise the
-        # threads will not terminate when the bot terminates.
+        # processes will not terminate when the bot terminates.
         # (TODO? There may be a better way to do this...)
-        self.thread = Thread(target = self.wait_for_event, daemon = True)
+        multiprocessing.Process.__init__(
+            self, target = self.wait_for_event, daemon = True
+        )
+        # Store client instance.
+        self.client: Client = Client(config_file = zuliprc)
+        # Get own multiprocessing-aware logger.
+        self.logger: logging.Logger = multiprocessing.log_to_stderr()
 
     def wait_for_event(self) -> None:
-        logging.debug('Command {} is listening on events: {}'.format(
+        """Wait for an event."""
+        self.logger.debug('Command {} is listening on events: {}'.format(
             type(self).name, str(type(self).events)
         ))
         self.client.call_on_each_event(
@@ -99,7 +106,7 @@ class CommandDaemon(Command):
         )
 
     def event_callback(self, event: Dict[str, Any]) -> None:
-        logging.debug('Command {} received event: {}'.format(
+        self.logger.debug('Command {} received event: {}'.format(
             type(self).name, str(event)
         ))
 
@@ -113,9 +120,11 @@ class CommandDaemon(Command):
 class CommandOneShot(Command):
     """Base class for one-shot commands.
 
-    They are neither interactive nor daemon commands.
-    Currently, this class exists only for management purposes.
+    They are neither daemon nor interactive commands.
     """
+    @abstractmethod
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__()
 
 
 class CommandInteractive(Command):
@@ -127,6 +136,7 @@ class CommandInteractive(Command):
 
     @abstractmethod
     def __init__(self, **kwargs: Any) -> None:
+        super().__init__()
         self._pattern: Pattern[str]
 
     @abstractmethod

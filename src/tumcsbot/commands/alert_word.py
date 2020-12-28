@@ -44,6 +44,7 @@ class Command(command.CommandInteractive):
     _list_sql: str = 'select * from Alerts'
 
     def __init__(self, **kwargs: Any) -> None:
+        super().__init__()
         self._pattern = re.compile(
             r'\s*alert_word\s*(?:add *.+\n.+|remove *.+|list\s*)', re.I
         )
@@ -109,10 +110,8 @@ class Command(command.CommandInteractive):
             return lib.Response.build_message(message, response)
 
         # search for identifier in database table
-        result_sql = self._db.execute(Command._search_sql, args[1].strip())
-
-        # Get alert phrase for all subsequent commands.
         alert_phrase: str = args[1].strip()
+        result_sql = self._db.execute(Command._search_sql, alert_phrase)
 
         if args[0] == 'add':
             emoji = args[2].strip()
