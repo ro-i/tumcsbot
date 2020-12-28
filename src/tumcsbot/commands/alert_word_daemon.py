@@ -10,7 +10,8 @@ Provide also an interactive command so administrators are able to
 change the alert words and specify the emojis to use for the reactions.
 """
 
-from typing import Any, Dict, List, Union
+import re
+from typing import Any, Dict, Iterable, List, Pattern, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -21,7 +22,7 @@ from tumcsbot.client import Client
 class Command(command.CommandDaemon):
     name: str = 'alert_word_daemon'
     events: List[str] = ['message']
-    _search_sql: str = 'select Emoji from Alerts where instr(?, Phrase)'
+    _select_sql: str = 'select Phrase, Emoji from Alerts'
 
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         super().__init__(zuliprc)
@@ -32,16 +33,18 @@ class Command(command.CommandDaemon):
             table = 'Alerts',
             schema = '(Phrase varchar, Emoji varchar)'
         )
+        # Cache for alert_phrase - emoji bindings.
+        self._bindings: Dict[str, str] = {}
+        # Cached pattern,
+        self._pattern: Pattern[str] = re.compile('')
 
     def is_responsible(
         self,
         client: Client,
         event: Dict[str, Any]
     ) -> bool:
-        # 'flags' and 'has_alert_word' implies that the event is a message.
         # Do not react on own messages.
-        return ('flags' in event
-                and 'has_alert_word' in event['flags']
+        return (event['type'] == 'message'
                 and event['message']['sender_id'] != client.id)
 
     def func(
@@ -49,13 +52,26 @@ class Command(command.CommandDaemon):
         client: Client,
         event: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
-        responses: List[lib.Response] = []
-        query: str = event['message']['content'].lower()
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
+        responses: Iterable[lib.Response] = []
 
-        for (emoji, ) in self.db.execute(Command._search_sql, query):
-            responses.append(lib.Response.build_reaction(
-                message = event['message'], emoji = emoji
-            ))
+        self.update_pattern()
+        if not self._bindings:
+            return lib.Response.none()
 
-        return responses
+        return map(
+            lambda phrase: lib.Response.build_reaction(
+                message = event['message'], emoji = self._bindings[phrase]
+            ),
+            set(self._pattern.findall(event['message']['content']))
+        )
+
+    def update_pattern(self) -> None:
+        """Update the regex if necessary."""
+        tmp: Dict[str, str] = dict(self.db.execute(Command._select_sql))
+        if tmp == self._bindings:
+            return
+        self._pattern = re.compile('({})'.format(
+            '|'.join(map(re.escape, tmp.keys()))
+        ), re.IGNORECASE)
+        self._bindings = tmp

@@ -13,7 +13,7 @@ change the alert words and specify the emojis to use for the reactions.
 import re
 
 from inspect import cleandoc
-from typing import Any, Dict, List, Match, Optional, Pattern, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, Match, Optional, Pattern, Sequence, Tuple, Union
 
 import tumcsbot.command as command
 import tumcsbot.lib as lib
@@ -31,9 +31,6 @@ class Command(command.CommandInteractive):
         Add an alert word / phrase together with the emoji the bot \
         should use to react on messages containing the corresponding \
         alert phrase. 
-        Internally, \
-        [this Zulip service](https://zulip.com/help/add-an-alert-word) \
-        is used.
         [administrator rights needed]
         """
     )
@@ -57,9 +54,9 @@ class Command(command.CommandInteractive):
         self._pattern_list: Pattern[str] = re.compile(
             r'\s*alert_word\s*(list)\s*', re.I
         )
-        # get own database connection
+        # Get own database connection.
         self._db = lib.DB()
-        # check for database table
+        # Check for database table.
         self._db.checkout_table(
             table = 'Alerts',
             schema = '(Phrase varchar, Emoji varchar)'
@@ -70,7 +67,7 @@ class Command(command.CommandInteractive):
         client: Client,
         message: Dict[str, Any],
         **kwargs: Any
-    ) -> Union[lib.Response, List[lib.Response]]:
+    ) -> Union[lib.Response, Iterable[lib.Response]]:
         result_sql: List[Tuple[Any, ...]]
 
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
@@ -87,26 +84,11 @@ class Command(command.CommandInteractive):
             return lib.Response.command_not_found(message)
         args: Union[Sequence[str], Any] = match.groups()
 
-        # Receive the alert words from the server storage.
-        result = client.get_alert_words()
-        if result['result'] != 'success':
-            return lib.Response.error(message)
-        alert_phrases: List[str] = result['alert_words']
-
         if args[0] == 'list':
             result_sql = self._db.execute(Command._list_sql)
             response: str = 'Alert word or phrase | Emoji\n---- | ----'
             for (phrase, emoji) in result_sql:
-                if phrase not in alert_phrases:
-                    response += '\n~~{0}~~ | {1} :{1}:'.format(phrase, emoji)
-                else:
-                    response += '\n{0} | {1} :{1}:'.format(phrase, emoji)
-            # Get all phrases stored in the database.
-            db_phrases: List[str] = [ phrase for (phrase, emoji) in result_sql ]
-            # Append alert words without emoji binding.
-            for phrase in alert_phrases:
-                if phrase not in db_phrases:
-                    response += '\n{} | -'.format(phrase)
+                response += '\n{0} | {1} :{1}:'.format(phrase, emoji)
             return lib.Response.build_message(message, response)
 
         # search for identifier in database table
@@ -115,9 +97,6 @@ class Command(command.CommandInteractive):
 
         if args[0] == 'add':
             emoji = args[2].strip()
-            # Add alert word to server storage.
-            if client.add_alert_words([alert_phrase])['result'] != 'success':
-                return lib.Response.error(message)
             # Add binding to database or update it.
             if result_sql:
                 self._db.execute(
@@ -130,9 +109,6 @@ class Command(command.CommandInteractive):
         elif args[0] == 'remove':
             if not result_sql:
                 return lib.Response.no(message)
-            if alert_phrase in alert_phrases:
-                if client.remove_alert_words([alert_phrase])['result'] != 'success':
-                    return lib.Response.error(message)
             self._db.execute(Command._remove_sql, alert_phrase, commit = True)
 
         return lib.Response.ok(message)
