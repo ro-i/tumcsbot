@@ -63,7 +63,7 @@ class Command(command.CommandDaemon):
             lambda phrase: lib.Response.build_reaction(
                 message = event['message'], emoji = self._bindings[phrase]
             ),
-            set(self._pattern.findall(event['message']['content']))
+            set(self._pattern.findall(event['message']['content'].lower()))
         )
 
     def update_pattern(self) -> None:
@@ -73,5 +73,5 @@ class Command(command.CommandDaemon):
             return
         self._pattern = re.compile('({})'.format(
             '|'.join(map(re.escape, tmp.keys()))
-        ), re.IGNORECASE)
+        ))
         self._bindings = tmp
