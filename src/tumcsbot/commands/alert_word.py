@@ -49,7 +49,7 @@ class Command(command.CommandInteractive):
             r'\s*alert_word\s*(?:add *.+\n.+|remove *.+|list\s*)', re.I
         )
         self._pattern_add: Pattern[str] = re.compile(
-            r'\s*alert_word\s*(add) *(.+)\n(.+)', re.I
+            r'\s*alert_word\s*(add) *(.+)\n\s*:?([^:]+):?\s*', re.I
         )
         self._pattern_remove: Pattern[str] = re.compile(
             r'\s*alert_word\s*(remove) *(.+)', re.I
