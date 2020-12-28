@@ -153,6 +153,9 @@ class TumCSBot:
                     default_values = '("{}", 0, date())'.format(command.name)
                 )
             commands.append(command)
+            # Start plugin.
+            logging.debug('Start command ' + command.name)
+            command.start()
 
         lib.Helper.extend_command_docs(docs)
 

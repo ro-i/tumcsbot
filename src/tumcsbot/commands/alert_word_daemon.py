@@ -24,7 +24,6 @@ class Command(command.CommandDaemon):
     _search_sql: str = 'select * from Alerts'
 
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
-        """Complete the constructor of the parent class."""
         super().__init__(zuliprc)
         # get own database connection
         self.db = lib.DB(check_same_thread = False)
@@ -33,7 +32,6 @@ class Command(command.CommandDaemon):
             table = 'Alerts',
             schema = '(Phrase varchar, Emoji varchar)'
         )
-        self.start()
 
     def is_responsible(
         self,
