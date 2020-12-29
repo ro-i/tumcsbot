@@ -274,5 +274,6 @@ class TumCSBot:
         logging.debug('Listening on events: ' + str(self.events))
         self.client.call_on_each_event(
             lambda event: self.event_callback(event),
-            event_types = self.events
+            event_types = self.events,
+            all_public_streams = True
         )

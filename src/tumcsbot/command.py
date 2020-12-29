@@ -94,6 +94,8 @@ class CommandDaemon(multiprocessing.Process, Command):
         self.client: Client = Client(config_file = zuliprc)
         # Get own multiprocessing-aware logger.
         self.logger: logging.Logger = multiprocessing.log_to_stderr()
+        # Maybe specify some additional arguments for the event queue.
+        self.event_register_params: Dict[str, Any] = {}
 
     def wait_for_event(self) -> None:
         """Wait for an event."""
@@ -102,7 +104,8 @@ class CommandDaemon(multiprocessing.Process, Command):
         ))
         self.client.call_on_each_event(
             lambda event: self.event_callback(event),
-            event_types = type(self).events
+            event_types = type(self).events,
+            **self.event_register_params
         )
 
     def event_callback(self, event: Dict[str, Any]) -> None:
