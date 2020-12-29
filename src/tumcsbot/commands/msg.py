@@ -35,7 +35,7 @@ class Command(command.CommandInteractive):
     def __init__(self, **kwargs: Any):
         super().__init__()
         self._pattern: Pattern[str] = re.compile(
-            r'\s*msg\s*(?:store *[^\n]+\n.+|send *[^\n]+|delete *[^\n]+|list\s*)',
+            r'\s*msg\s*(?:store *[^\n]+\n.+|send *[^\n]+|remove *[^\n]+|list\s*)',
             re.I | re.DOTALL
         )
         self._pattern_add: Pattern[str] = re.compile(

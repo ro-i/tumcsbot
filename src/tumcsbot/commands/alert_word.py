@@ -110,5 +110,7 @@ class Command(command.CommandInteractive):
             if not result_sql:
                 return lib.Response.no(message)
             self._db.execute(Command._remove_sql, alert_phrase, commit = True)
+        else:
+            return lib.Response.no(message)
 
         return lib.Response.ok(message)
