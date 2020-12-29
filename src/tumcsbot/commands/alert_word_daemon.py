@@ -37,6 +37,8 @@ class Command(command.CommandDaemon):
         self._bindings: Dict[str, str] = {}
         # Cached pattern,
         self._pattern: Pattern[str] = re.compile('')
+        # Replace markdown links by their textual representation.
+        self._markdown_links: Pattern[str] = re.compile(r'\[([^\]]*)\]\([^\)]+\)')
 
     def is_responsible(
         self,
@@ -59,11 +61,18 @@ class Command(command.CommandDaemon):
         if not self._bindings:
             return lib.Response.none()
 
+        # Get message content.
+        # Replace markdown links by their textual representation.
+        # Convert to lowercase.
+        content: str = self._markdown_links\
+            .sub(r'\1', event['message']['content'])\
+            .lower()
+
         return map(
             lambda phrase: lib.Response.build_reaction(
                 message = event['message'], emoji = self._bindings[phrase]
             ),
-            set(self._pattern.findall(event['message']['content'].lower()))
+            set(self._pattern.findall(content))
         )
 
     def update_pattern(self) -> None:
