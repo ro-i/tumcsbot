@@ -12,7 +12,7 @@ Client   A thin wrapper around zulip.Client.
 
 import logging
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 from zulip import Client as ZulipClient
 
 
@@ -31,6 +31,23 @@ class Client(ZulipClient):
         self.__profile: Dict[str, Any] = super().get_profile()
         self.id = self.get_profile()['user_id']
         self.__stream_names: Dict[int, str] = {} # see self.get_stream_name()
+        self.register_params: Dict[str, Any] = {}
+
+    def call_on_each_event(
+        self,
+        callback: Callable[[Dict[str, Any]], None],
+        event_types: Optional[List[str]] = None,
+        narrow: Optional[List[List[str]]] = None,
+        **kwargs: Any
+    ) -> None:
+        """Override zulip.Client.call_on_each_event.
+
+        Add additional parameters to pass to register().
+        See https://zulip.com/api/register-queue for the parameters
+        the register() method accepts.
+        """
+        self.register_params = kwargs
+        super().call_on_each_event(callback, event_types, narrow)
 
     def get_messages(self, message_filters: Dict[str, Any]) -> Dict[str, Any]:
         """Override zulip.Client.get_messages.
@@ -93,13 +110,13 @@ class Client(ZulipClient):
     ) -> Dict[str, Any]:
         """Override zulip.Client.register.
 
-        Override the parent method in order to register events of all
-        public streams.
-        See https://zulip.com/api/register-queue#parameter-all_public_streams
+        Override the parent method in order to enable additional
+        parameters for the register() call internally used by
+        call_on_each_event.
         """
         logging.debug("Client.register - event_types: {}, narrow: {}".format(
             str(event_types), str(narrow)
         ))
         return super().register(
-            event_types, narrow, all_public_streams = True,
+            event_types, narrow, **self.register_params
         )
