@@ -17,8 +17,8 @@ class Command(command.CommandOneShot):
     name: str = 'solved'
     events: List[str] = ['reaction']
     solved_emoji_name: str = 'check'
-    msg_pattern: str = 'has been marked as solution by'
-    msg_template: str = '[This answer ↑{}]({}) ' + msg_pattern
+    msg_pattern: str = ' has been marked as solution by '
+    msg_template: str = '[This answer ↑{}]({})' + msg_pattern
     mention_template: str = '@_**{}**'
     # arguments: stream id, topic name, message id
     path: str = '#narrow/stream/{}/topic/{}/near/{}'
@@ -164,7 +164,7 @@ class Command(command.CommandOneShot):
         client: Client,
         message: Dict[str, Any],
     ) -> Dict[str, Any]:
-        search: str = '↑{} '.format(message['id']) + Command.msg_pattern
+        search: str = '↑{}'.format(message['id']) + Command.msg_pattern
 
         result: Dict[str, Any] =  client.get_messages({
             'anchor': message['id'],
