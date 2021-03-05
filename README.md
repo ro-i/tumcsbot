@@ -10,11 +10,14 @@ of the Department of Informatics of the Technichal University of Munich.
 setup
 -----
 
-Currently, no special setup required. The bot only needs its `zuliprc` file
-which you receive when adding the bot to your Zulip instance. Currently, the
-bot is intended to run as `Generic` bot, owned by an administrator.
-- [add a bot](https://zulipchat.com/help/add-a-bot-or-integration)
-- [about bots](https://zulipchat.com/help/bots-and-integrations)
+- The bot is intended to run as `Generic` bot, owned by an administrator.
+  - [add a bot](https://zulipchat.com/help/add-a-bot-or-integration)
+  - [about bots](https://zulipchat.com/help/bots-and-integrations)
+- Get the bot's `zuliprc` file. Per default, it is expected to be located
+right in the root of the bot's git repo.
+- Configure `supervisor` (used by Zulip installations per default) to handle
+the bot by placing the configuration file `zulip_tumcsbot.conf` in
+`/etc/supervisor/conf.d`.
 
 Note: For some commands such as `subscribe` or `solved` the bot needs
 administrator and `api_super_user` rights.
