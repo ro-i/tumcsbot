@@ -3,10 +3,12 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
+import os
 import re
 import subprocess as sp
 
 from inspect import cleandoc
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 import tumcsbot.lib as lib
@@ -39,6 +41,17 @@ class Command(command.CommandInteractive):
     ) -> Union[lib.Response, Iterable[lib.Response]]:
         if not client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return lib.Response.admin_err(message)
+
+        # Get the dirname of this file (which is located in the git repo).
+        git_dir: Path = Path(__file__).parent.absolute()
+
+        try:
+            os.chdir(git_dir)
+        except Exception as e:
+            return lib.Response.build_message(
+                message,
+                f'Cannot access the directory of my git repo {git_dir}. Please contact the admin.'
+            )
 
         # Execute command and capture stdout and stderr into one stream (stdout).
         try:
