@@ -100,15 +100,21 @@ class TumCSBot:
         self.events.extend(self.get_events_from_commands(self.commands_interactive))
 
     def exit_handler(self) -> None:
+        """Terminate all attached processes.
+
+        Needs to be idempotent."""
         for process in self.commands_daemon:
             if not process.is_alive():
                 continue
             process.terminate()
+            process.join()
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Simple callback wrapper for processing one event.
 
-        Catch all Exceptions and logs them.
+        Catch all Exception objects and logs them.
+        Note: Exceptions inheriting directly from BaseException (such as
+        SystemExit) are not catched (and must not be catched!).
         """
         logging.debug('Received event: ' + str(event))
         try:

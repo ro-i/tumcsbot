@@ -11,6 +11,8 @@ a private message or a message starting with @mentioning the bot.
 """
 
 import argparse
+import os
+import sys
 
 from tumcsbot.tumcsbot import TumCSBot
 
@@ -43,8 +45,13 @@ def main() -> None:
         debug = args.debug,
         logfile = args.logfile
     )
-    bot.start()
 
+    try:
+        bot.start()
+    except SystemExit:
+        print('Received termination request. Restarting: ' + str(sys.argv))
+        bot.exit_handler()
+        os.execv(sys.argv[0], sys.argv)
 
 if __name__ == '__main__':
     main()

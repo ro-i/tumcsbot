@@ -49,7 +49,8 @@ virtualenv_func () {
 
 
 cmd="$1"
-dest_dir="$2"
+# Always use absolute file names.
+dest_dir=$(realpath "$2")
 shift 2
 
 if ! [ -d "$dest_dir" ]; then
