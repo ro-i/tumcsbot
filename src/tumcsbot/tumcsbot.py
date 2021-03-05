@@ -61,10 +61,12 @@ class TumCSBot:
         signal.signal(signal.SIGTERM, sigterm_handler)
 
         # Init logging.
+        logging_level: int = logging.WARNING
         if debug:
-            logging.basicConfig(level = logging.DEBUG, filename = logfile)
-        else:
-            logging.basicConfig(filename = logfile)
+            logging_level = logging.DEBUG
+        logging.basicConfig(
+            format='%(asctime)s %(message)s', level = logging_level, filename = logfile
+        )
 
         # Init Zulip client ...
         self.client: Client = Client(config_file = zuliprc)
