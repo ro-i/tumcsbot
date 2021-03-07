@@ -29,13 +29,6 @@ class Command(command.CommandDaemon):
     def __init__(self, zuliprc: str, **kwargs: Any) -> None:
         super().__init__(zuliprc)
 
-    def event_callback(self, event: Dict[str, Any]) -> None:
-        """Override CommandDaemon.event_callback."""
-        try:
-            self.func(self.client, event)
-        except Exception as e:
-            self.logger.exception(e)
-
     def func (
         self,
         client: Client,
