@@ -41,7 +41,7 @@ class TumCSBot:
     """
 
     _update_selfStats_sql = (
-        'update SelfStats set Count = Count + 1 where Command = "{}"'
+        'update SelfStats set Count = Count + 1 where Command = ?'
     )
 
     def __init__(
@@ -253,14 +253,13 @@ class TumCSBot:
                 continue
 
             # As multiple commands may be executed for one event, catch
-            # the exceptions of one command
+            # the exceptions of one command.
             try:
                 responses.append(command.func(self.client, event))
 
-                # update self stats
+                # Update self stats.
                 self._db.execute(
-                    TumCSBot._update_selfStats_sql.format(command.name),
-                    commit = True
+                    TumCSBot._update_selfStats_sql, command.name, commit = True
                 )
             except Exception as e:
                 logging.exception(e)
