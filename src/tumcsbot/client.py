@@ -3,35 +3,60 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-"""Simple wrapper around Zulip's Client class.
+"""Wrapper around Zulip's Client class.
 
 Classes:
 --------
-Client   A thin wrapper around zulip.Client.
+Client   A wrapper around zulip.Client.
+         See the class doc for the additional attributes and methods.
 """
 
 import logging
+import re
 
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import cast, Any, Callable, Dict, Iterable, List, Pattern, Optional, Union
 from zulip import Client as ZulipClient
+
+from tumcsbot.lib import DB, Response, MessageType
 
 
 class Client(ZulipClient):
-    """Wrapper around zulip.Client."""
+    """Wrapper around zulip.Client.
+
+    Additional attributes:
+      id         direct access to get_profile()['user_id']
+      ping       string used to ping the bot "@**<bot name>**"
+      ping_len   len(ping)
+
+    Additional Methods:
+    -------------------
+    get_public_stream_names   Get the names of all public streams.
+    get_streams_from_regex    Get the names of all public streams
+                              matching a regex.
+    get_stream_name           Get stream name for provided stream id.
+    private_stream_exists     Check if there is a private stream with
+                              the given name.
+    send_response             Send one single response.
+    send_responses            Send a list of responses.
+    subscribe_all_from_stream_to_stream
+                              Try to subscribe all users from one public
+                              stream to another.
+    subscribe_users           Subscribe a list of user ids to a public
+                              stream.
+    """
 
     # TODO: client_gravater etc. for better performance?
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Override the constructor of the parent class.
-
-        Additional attributes:
-          id          direct access to get_profile()['user_id']
-        """
+        """Override the constructor of the parent class."""
         super().__init__(*args, **kwargs)
-        self.__profile: Dict[str, Any] = super().get_profile()
-        self.id = self.get_profile()['user_id']
-        self.__stream_names: Dict[int, str] = {} # see self.get_stream_name()
+        self.id: int = self.get_profile()['user_id']
+        self.ping: str = '@**{}**'.format(self.get_profile()['full_name'])
+        self.ping_len: int = len(self.ping)
         self.register_params: Dict[str, Any] = {}
+        self._db = DB()
+        self._init_db()
 
     def call_on_each_event(
         self,
@@ -57,50 +82,94 @@ class Client(ZulipClient):
         message_filters['apply_markdown'] = False
         return super().get_messages(message_filters)
 
-    def get_profile(
-        self,
-        request: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Override zulip.Client.get_profile with a caching version.
+    def get_public_stream_names(self, use_db: bool = True) -> List[str]:
+        """Get the names of all public streams.
 
-        Assume that the profile of the bot does not change while it is
-        online.
-        Currently, the 'request' parameter is not used by the Zulip
-        code. In case that this changes, implement a small check and
-        fall back to the get_profile() of the superclass if the
-        'request' parameter is not None.
+        Use the database in conjunction with the plugin "autosubscriber"
+        to avoid unnecessary network requests.
+        In case of an error, return an empty list.
         """
-        if request is not None:
-            return super().get_profile(request)
-        return self.__profile
+        def without_db() -> List[str]:
+            result: Dict[str, Any] = self.get_streams(
+                include_public = True, include_subscribed = False
+            )
+            if result['result'] != 'success':
+                return []
+            return list(map(lambda d: cast(str, d['name']), result['streams']))
+
+        if not use_db:
+            return without_db()
+
+        try:
+            return list(map(
+                lambda t: cast(str, t[0]),
+                self._db.execute('select StreamName from PublicStreams')
+            ))
+        except Exception as e:
+            logging.exception(e)
+            return without_db()
+
+    def get_streams_from_regex(self, regex: str) -> List[str]:
+        """Get the names of all public streams matching a regex.
+
+        The regex has to match the full stream name.
+        Return an empty list if the regex is not valid.
+        """
+        if not regex:
+            return []
+
+        try:
+            pat: Pattern[str] = re.compile(regex)
+        except re.error:
+            return []
+
+        return [
+            stream_name for stream_name in self.get_public_stream_names()
+            if pat.fullmatch(stream_name)
+        ]
 
     def get_stream_name(self, stream_id: int) -> Optional[str]:
         """Get stream name for provided stream id.
 
         Return the stream name as string or None if the stream name
         could not be determined.
-        Cache the results in order to minimize the expensive requests.
         """
-        def cache_lookup(stream_id: int) -> Optional[str]:
-            if stream_id in self.__stream_names:
-                return self.__stream_names[stream_id]
-            return None
-
-        # Check if the stream name is already in the cache.
-        stream_name: Optional[str] = cache_lookup(stream_id)
-        if stream_name is not None:
-            return stream_name
-
-        # If not, update cache.
-
-        # Get a list of all active streams.
         result: Dict[str, Any] = self.get_streams(include_all_active = True)
         if result['result'] != 'success':
             return None
-        for stream in result['streams']:
-            self.__stream_names[stream['stream_id']] = stream['name']
 
-        return cache_lookup(stream_id)
+        for stream in result['streams']:
+            if stream['stream_id'] == stream_id:
+                return cast(str, stream['name'])
+
+        return None
+
+    def _init_db(self) -> None:
+        """Initialize some tables of the database."""
+        self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
+        stream_names: List[str] = self.get_public_stream_names(use_db = False)
+        for s in stream_names:
+            self._db.execute(
+                'insert or ignore into PublicStreams(StreamName) values (?)', s,
+                commit = True
+            )
+
+    def private_stream_exists(self, stream_name: str) -> bool:
+        """Check if there is a private stream with the given name.
+
+        Return true if there is a private stream with the given name.
+        Return false if there is no stream with this name or if the
+        stream is not private.
+        """
+        result: Dict[str, Any] = self.get_streams(include_all_active = True)
+        if result['result'] != 'success':
+            return False # TODO?
+
+        for stream in result['streams']:
+            if stream['name'] == stream_name:
+                return bool(stream['invite_only'])
+
+        return False
 
     def register(
         self,
@@ -114,9 +183,132 @@ class Client(ZulipClient):
         parameters for the register() call internally used by
         call_on_each_event.
         """
-        logging.debug("Client.register - event_types: {}, narrow: {}".format(
-            str(event_types), str(narrow)
-        ))
-        return super().register(
-            event_types, narrow, **self.register_params
-        )
+        logging.debug('event_types: %s, narrow: %s', str(event_types), str(narrow))
+        return super().register(event_types, narrow, **self.register_params)
+
+    def send_response(self, response: Response) -> Dict[str, Any]:
+        """Send one single response."""
+        logging.debug('send_response: %s', str(response))
+
+        if response.message_type == MessageType.MESSAGE:
+            return self.send_message(response.response)
+        elif response.message_type == MessageType.EMOJI:
+            return self.add_reaction(response.response)
+        return {}
+
+    def send_responses(
+        self,
+        responses: Union[
+            Response,
+            Iterable[Union[Response, Iterable[Response]]],
+            Union[Response, Iterable[Response]]
+        ]
+    ) -> None:
+        """Send the given responses."""
+        if responses is None:
+            logging.debug('responses is None, this should never happen')
+            return
+
+        if not isinstance(responses, Iterable):
+            self.send_response(responses)
+            return
+
+        for response in responses:
+            self.send_responses(response)
+
+
+    def subscribe_all_from_stream_to_stream(
+        self,
+        from_stream: str,
+        to_stream: str,
+        description: Optional[str] = None
+    ) -> bool:
+        """Try to subscribe all users from one public stream to another.
+
+        Arguments:
+        ----------
+        from_stream   An existant public stream.
+        to_stream     The stream to subscribe to.
+                      Must be public, if already existant. If it does
+                      not already exists, it will be created.
+        description   An optional description to be used to
+                      create the stream first.
+
+        Return true on success or false otherwise.
+        """
+        if (self.private_stream_exists(from_stream)
+                or self.private_stream_exists(to_stream)):
+            return False
+
+        subs: Dict[str, Any] = self.get_subscribers(stream = from_stream)
+        if subs['result'] != 'success':
+            return False
+
+        return self.subscribe_users(subs['subscribers'], to_stream, description)
+
+    def subscribe_users(
+        self,
+        user_ids: List[int],
+        stream_name: str,
+        description: Optional[str] = None
+    ) -> bool:
+        """Subscribe a list of user ids to a public stream.
+
+        Arguments:
+        ----------
+        user_ids      The list of user ids to subscribe.
+        stream_name   The name of the stream to subscribe to.
+        description   An optional description to be used to
+                      create the stream first.
+
+        Return true on success or false otherwise.
+        """
+        subscription: Dict[str, str] = {'name': stream_name}
+        if description is not None:
+            subscription.update(description = description)
+
+        # Use chunks of 500 users. TODO: non-existant users
+        for i in range(0, len(user_ids), 500):
+            result: Dict[str, Any] = self.add_subscriptions(
+                streams = [subscription],
+                principals = user_ids[i:i + 500]
+                # (a too large index will be automatically reduced to len())
+            )
+            if result['result'] != 'success':
+                return False
+
+        return True
+
+#    def subscribe_user(
+#        self,
+#        user_id: int,
+#        stream: Dict[str, Any]
+#    ) -> None:
+#        """Subscribe a user to a stream if the user is not yet subscribed.
+#
+#        The Argument "stream" is a stream object as returned by a
+#        "stream-add" event.
+#        See docs: https://zulip.com/api/get-events#stream-add.
+#        Do not subscribe to private streams.
+#        """
+#        result: Dict[str, Any]
+#
+#        if stream['invite_only']:
+#            return
+#
+#        # Check whether the user already is subscribed to that stream.
+#        result = self.call_endpoint(
+#            url = '/users/{}/subscriptions/{}'.format(user_id, stream['stream_id']),
+#            method = 'GET'
+#        )
+#        # If the request failed, we try to subscribe anyway.
+#        if result['result'] == 'success' and result['is_subscribed']:
+#            return
+#        elif result['result'] != 'success':
+#            logging.warning(
+#                'failed subscription status check, stream_id %s', stream['stream_id']
+#            )
+#
+#        result = self.add_subscriptions(streams = [{'name': stream['name']}])
+#        if result['result'] != 'success':
+#            logging.warning('cannot subscribe %s to stream: %s', user_id, str(result))

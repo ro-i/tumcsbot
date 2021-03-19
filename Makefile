@@ -29,6 +29,21 @@ init: database virtualenv
 database:
 	@bash -- manage.sh database '$(dest_dir)'
 
+# run only mypy, not all static_analysis
+.PHONY: mypy
+mypy:
+	@bash -- manage.sh mypy '$(dest_dir)'
+
+# run static analysis checker
+.PHONY: static_analysis
+static_analysis:
+	@bash -- manage.sh static_analysis '$(dest_dir)'
+
+# run tests
+.PHONY: tests
+tests:
+	@bash -- manage.sh tests '$(dest_dir)'
+
 # install virtual environment
 .PHONY: virtualenv
 virtualenv:

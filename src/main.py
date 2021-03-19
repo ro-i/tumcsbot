@@ -31,8 +31,12 @@ def main() -> None:
         help = 'path to the bot\'s database'
     )
     argument_parser.add_argument(
+        '-t', '--threads', metavar = 'N', type = int, default = 8,
+        help = 'maximum number of threads to use to run the plugins (default: 8)'
+    )
+    argument_parser.add_argument(
         '-d', '--debug', action = 'store_true',
-        help = 'print debug information on the console'
+        help = 'debugging mode switch'
     )
     argument_parser.add_argument(
         '-l', '--logfile', help = 'use LOGFILE for logging output'
@@ -42,12 +46,13 @@ def main() -> None:
     bot: TumCSBot = TumCSBot(
         zuliprc = args.zuliprc[0],
         db_path = args.db_path[0],
+        max_workers = args.threads,
         debug = args.debug,
         logfile = args.logfile
     )
 
     try:
-        bot.start()
+        bot.run()
     except SystemExit:
         print('Received termination request. Restarting: ' + str(sys.argv))
         bot.exit_handler()

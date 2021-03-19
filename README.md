@@ -39,7 +39,7 @@ usage
 
 You can also run the bot manually:
 ```
-usage: main.py [-h] [-d] [-l LOGFILE] ZULIPRC DB_PATH
+usage: main.py [-h] [-t N] [-d] [-l LOGFILE] ZULIPRC DB_PATH
 
 TUM CS Bot - a generic Zulip bot.
 
@@ -53,7 +53,8 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -d, --debug           print debug information on the console
+  -t N, --threads N     maximum number of threads to use to run the plugins (default: 8)
+  -d, --debug           debugging mode switch
   -l LOGFILE, --logfile LOGFILE
                         use LOGFILE for logging output
 ```
@@ -77,8 +78,15 @@ The bot supports a dynamic plugin infrastructure and also generates the help
 message dynamically by using appropriate attributes every plugin has to
 provide.
 
-[mypy](https://github.com/python/mypy) with `--strict` should not show any
-significant warnings.
+In order to apply database migration scripts conveniently, there is the script
+`src/migrate.py`.
+
+
+additional `make` targets
+-------------------------
+- `make tests` runs some unit tests.
+- `make mypy` runs `mypy --strict` and should not show any issue.
+- `make static_analysis` currently runs `mypy` and `pylint`.
 
 
 model

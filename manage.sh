@@ -3,11 +3,17 @@
 set -e
 
 
+_command_exists_or_exit () {
+	if ! type "$1" > /dev/null; then
+		echo "$1 not found"
+		exit 1
+	fi
+}
+
 clean_func () {
 	# remove virtual environment
 	rm -rf "${dest_dir}/venv"
 }
-
 
 database_func () {
 	db="${dest_dir}/tumcsbot.db"
@@ -21,12 +27,38 @@ database_func () {
 	chmod 0600 "$db"
 }
 
+mypy_func () {
+	_command_exists_or_exit mypy
+	mypy --strict "${dest_dir}/src"
+}
+
 run_func () {
 	# enter virtual environment
 	. "${dest_dir}/venv/bin/activate"
 
 	# execute bot
 	exec "${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc" "${dest_dir}/tumcsbot.db"
+}
+
+static_analysis_func () {
+	_command_exists_or_exit pylint
+	# Disable some checks.
+	pylint --overgeneral-exceptions=BaseException \
+		--min-similarity-lines=100 \
+		--no-docstring-rgx='.*' \
+		--good-names-rgxs='[a-z],[a-z][a-z]' \
+		--disable=C0114,W0702 \
+		--exit-zero \
+		"${dest_dir}/src"
+	mypy_func
+}
+
+test_func () {
+	# enter virtual environment
+	. "${dest_dir}/venv/bin/activate"
+
+	# execute tests
+	exec python3 -m unittest discover --start-directory "${dest_dir}/src"
 }
 
 virtualenv_func () {
@@ -67,10 +99,23 @@ case "$cmd" in
 	'database')
 		database_func "$@"
 		;;
+	'mypy')
+		mypy_func "$@"
+		;;
 	'run')
 		run_func "$@"
 		;;
+	'static_analysis')
+		static_analysis_func "$@"
+		;;
+	'tests')
+		test_func "$@"
+		;;
 	'virtualenv')
 		virtualenv_func "$@"
+		;;
+	*)
+		echo "command not found: $cmd"
+		exit 1
 		;;
 esac

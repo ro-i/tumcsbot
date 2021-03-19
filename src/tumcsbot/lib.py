@@ -12,22 +12,22 @@ MessageType  Enum describing the type of a message.
 DB           Simple sqlite wrapper.
 Helper       Collect docs of interactive commands.
 Response     Provide Response building methods.
-
-Functions:
-----------
-send_responses   Send a list of responses.
 """
 
-import logging
 import re
+import shlex
 import sqlite3 as sqlite
 
-from collections.abc import Iterable
+from argparse import Namespace
 from enum import Enum
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from itertools import repeat
+from typing import Any, Callable, Dict, Final, List, Match, Optional, Tuple, Union
 
-from .client import Client
+
+LOGGING_FORMAT: str = (
+    '%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s'
+)
 
 
 class StrEnum(str, Enum):
@@ -35,18 +35,6 @@ class StrEnum(str, Enum):
 
     See https://docs.python.org/3/library/enum.html#others.
     """
-
-
-class Regex(StrEnum):
-    """Some widely used regular expressions.
-
-    OPT_ASTERISKS  Match optional asterisks enclosing autocompleted
-                   stream or user names.
-    STREAM         Match a stream name.
-    """
-
-    OPT_ASTERISKS: str = r'(?:\*\*|)'
-    STREAM: str = r'[^*#]*'
 
 
 class MessageType(StrEnum):
@@ -62,11 +50,127 @@ class MessageType(StrEnum):
     NONE: str = 'none'
 
 
-class DB:
-    """Simple wrapper class to conveniently access a sqlite database.
+class Regex:
+    """Some widely used regular expressions and methods using them.
 
-    Currently not threadsafe.
+    OPT_ASTERISKS  Match optional asterisks enclosing autocompleted
+                   stream or user names.
+    STREAM         Match a stream name.
     """
+
+    OPT_ASTERISKS: Final[str] = r'(?:\*\*|)'
+    STREAM: Final[str] = r'[^*#]+'
+
+    @classmethod
+    def get_stream_name(cls, string: str) -> Optional[str]:
+        """Try hard to extract the stream name from a string.
+
+        There are three cases handled here:
+           abc -> abc, #abc -> abc, #**abc** -> abc
+
+        Leading/trailing whitespace is discarded.
+        Return None if no match can be found.
+        """
+        match: Optional[Match[str]] = re.match(
+            r'\s*#?{0}({1}){0}\s*'.format(Regex.OPT_ASTERISKS, Regex.STREAM),
+            string, flags = re.I
+        )
+        if match is None:
+            return match
+        return match.group(1)
+
+
+class CommandParser:
+    """A simple positional argument parser."""
+    class Args(Namespace):
+        pass
+
+    def __init__(self) -> None:
+        self.commands: Dict[str, Tuple[
+            Dict[str, Callable[[str], Any]], bool, bool
+        ]] = {}
+
+    def add_subcommand(
+        self,
+        name: str,
+        args: Dict[str, Callable[[str], Any]] = {},
+        greedy: bool = False,
+        optional: bool = False
+    ) -> bool:
+        """Add a subcommand to the parser.
+
+        Arguments:
+        ----------
+        name       The name of the subcommand.
+        args       The arguments to be expected as dict mapping the
+                   argument name to the function that should be used
+                   to get the argument value from the command string.
+                   (default: {})
+        greedy     The last argument should consume all remaining
+                   tokens of the command string (if there are any).
+                   Note that the return value for the last argument
+                   will be a list in that case.
+                   (default: False)
+        optional   The last argument is optional.
+                   (default: False)
+
+        Note that the arguments will be passed in the order they
+        appear in the list.
+        """
+        if not name:
+            return False
+        self.commands.update({name: (args, greedy, optional)})
+        return True
+
+    def parse(self, command: Optional[str]) -> Optional[Tuple[str, Args]]:
+        """Parse the given command string."""
+        result_args: Dict[str, Any] = {}
+
+        if not command or not self.commands:
+            return None
+
+        # Split on (any) whitespace.
+        tokens: Optional[List[str]] = split(command)
+        if not tokens:
+            return None
+
+        # Get the fitting subcommand.
+        subcommand: str = tokens[0]
+        if subcommand not in self.commands:
+            return None
+        token_len: int = len(tokens[1:])
+
+        args, greedy, optional = self.commands[subcommand]
+        args_len: int = len(args)
+        if ((args_len > token_len + (1 if optional else 0))
+                or (not greedy and args_len < token_len)):
+            return None
+
+        name: Optional[str] = None
+        converter: Optional[Callable[[str], Any]] = None
+
+        # Iterate over expected arguments in the correct order.
+        for token, (name, converter) in zip(tokens[1:], args.items()):
+            try:
+                result_args.update({name: converter(token)})
+            except:
+                return None
+
+        # If greedy, consume the remaining tokens into the last argument.
+        # Check, however, if there is an optional argument that is not present.
+        if greedy and not (optional and args_len > token_len) and name and converter:
+            try:
+                rest_list: List[Any] = list(map(converter, tokens[args_len + 1:]))
+                rest_list.insert(0, result_args[name])
+            except:
+                return None
+            result_args[name] = rest_list
+
+        return (subcommand, self.Args(**result_args))
+
+
+class DB:
+    """Simple wrapper class to conveniently access a sqlite database."""
 
     path: Optional[str] = None
 
@@ -79,6 +183,8 @@ class DB:
             raise ValueError('no path to database given')
         self.connection = sqlite.connect(DB.path, *args, **kwargs)
         self.cursor = self.connection.cursor()
+        # Switch on foreign key support.
+        self.execute('pragma foreign_keys = on')
 
     def checkout_table(self, table: str, schema: str) -> None:
         """Create table if it does not already exist.
@@ -89,43 +195,8 @@ class DB:
         schema  schema of the table in the form of
                     '(Name Type, ...)' --> valid SQL!
         """
-        result: List[Tuple[Any, ...]] = self.execute(
-            ('select * from sqlite_master where type = "table" and '
-             'name = "{}";'.format(table))
-        )
-        if not result:
-            self.execute(
-                'create table {} {};'.format(table, schema),
-                commit = True
-            )
-
-    def checkout_row(
-        self,
-        table: str,
-        key_column: str,
-        key: str,
-        default_values: str
-    ) -> None:
-        """Create row in table if it does not already exist.
-
-        Arguments:
-        ----------
-        table           name of the table
-        key_column      name of the column of the primary key
-        key             key to identify the row
-        default_values  default value to insert if row does not yet
-                        exist
-                        - must be in the form of
-                          '(Integer, "String", ...)' --> valid SQL!
-        """
-        result: List[Tuple[Any, ...]] = self.execute(
-            'select * from {} where {} = "{}";'.format(table, key_column, key)
-        )
-        if not result:
-            self.execute(
-                'insert into {} values {}'.format(table, default_values),
-                commit = True
-            )
+        if not self.table_exists(table):
+            self.execute('create table {} {};'.format(table, schema), commit = True)
 
     def execute(
         self,
@@ -139,61 +210,20 @@ class DB:
         (if commit == True) and return the result of the command.
         Forward 'args' to cursor.execute()
         """
-        result: sqlite.Cursor = self.cursor.execute(command, args)
+        try:
+            result: sqlite.Cursor = self.cursor.execute(command, args)
+        except sqlite.Error as e:
+            self.connection.rollback()
+            raise e
         if commit:
             self.connection.commit()
         return result.fetchall()
 
-
-class Helper:
-    """Get the docs of the interactive commands for the users.
-
-    Collect all usage documentation from the command classes during
-    their import by TumCSBot.
-    """
-
-    help: str = cleandoc(
-        """
-        Hi {}!
-        Currently, I understand the following commands:
-
-        {}
-
-        Have a nice day! :-)
-        """
-    )
-    command_docs: str = ''
-
-    @classmethod
-    def get_help(cls, user: str) -> str:
-        """Return help string."""
-        return cls.help.format(user, cls.command_docs)
-
-    @classmethod
-    def extend_command_docs(cls, docs: List[Tuple[str, str]]) -> None:
-        """Add further docs to the internal documentation.
-
-        Format the syntax and description received from the command.
-        """
-        processed: List[str] = []
-
-        # sort by syntax string
-        docs = sorted(docs, key = lambda tuple: tuple[0])
-
-        # format
-        for (syntax, desc) in docs:
-            syntax = '- `' + syntax.replace('\n', '') + '`'
-            # replace multiple whitespaces by a single one
-            for space in [ '\n', ' ', '\t' ]:
-                desc = re.sub(space + r'{2,}', space, desc)
-            if not desc.endswith('\n'):
-                desc += '\n'
-            # ensure one (!) joining newline
-            if not desc.startswith('\n'):
-                syntax += '\n'
-            processed.append(syntax + desc)
-
-        cls.command_docs += '\n'.join(processed)
+    def table_exists(self, table: str) -> bool:
+        """Check if a table with the given name exists."""
+        return bool(self.execute(
+            'select * from sqlite_master where type = "table" and name = ?', table
+        ))
 
 
 class Response:
@@ -253,7 +283,7 @@ class Response:
         message: Optional[Dict[str, Any]],
         content: str,
         msg_type: Optional[str] = None,
-        to: Optional[Union[str, int]] = None,
+        to: Optional[Union[str, int, List[int], List[str]]] = None,
         subject: Optional[str] = None
     ) -> 'Response':
         """Build a message.
@@ -329,6 +359,24 @@ class Response:
         )
 
     @classmethod
+    def build_reaction_from_id(
+        cls,
+        message_id: int,
+        emoji: str
+    ) -> 'Response':
+        """Build a reaction response.
+
+        Arguments:
+        ----------
+        message_id   The id of the message to react on.
+        emoji        The emoji to react with.
+        """
+        return cls(
+            MessageType.EMOJI,
+            dict(message_id = message_id, emoji_name = emoji)
+        )
+
+    @classmethod
     def admin_err(
         cls, message: Dict[str, Any]
     ) -> 'Response':
@@ -347,10 +395,7 @@ class Response:
         cls, message: Dict[str, Any]
     ) -> 'Response':
         """Tell the user that his command could not be found."""
-        return cls.build_message(
-            message,
-            cls.command_not_found_msg.format(message['sender_full_name'])
-        )
+        return cls.build_reaction(message, 'question')
 
     @classmethod
     def error(
@@ -399,25 +444,79 @@ class Response:
         return cls(MessageType.NONE, {})
 
 
-def send_responses(
-    client: Client,
-    responses: Union[Response,
-                     Iterable[Union[Response, Iterable[Response]]],
-                     Union[Response, Iterable[Response]]]
-) -> None:
-    """Send the given responses."""
-    def send_response(client: Client, response: Response) -> None:
-        """Send one single response."""
-        logging.debug('send_response: ' + str(responses))
+def split(
+    string: str,
+    sep: Optional[str] = None,
+    exact_split: int = 0,
+    discard_empty: bool = True,
+    converter: Optional[List[Callable[[str], Any]]] = None
+) -> Optional[List[Any]]:
+    """Similar to the default split, but respects quotes.
 
-        if response.message_type == MessageType.MESSAGE:
-            client.send_message(response.response)
-        elif response.message_type == MessageType.EMOJI:
-            client.add_reaction(response.response)
+    Basically, it's a wrapper for shlex.
 
-    if not isinstance(responses, Iterable):
-        send_response(client, responses)
-        return
+    Arguments:
+    ----------
+    string         The string to split.
+    sep            The delimiter to split on may be any string, but is
+                   not supposed to contain quotation characters.
+    exact_split    If the resulting list after splitting has not
+                   exact_split elements, return None.
+                   Values <= 0 will be ignored.
+                   Note that exact_split is verified **after**
+                   discarding empty strings (if discard_empty is true).
+    discard_empty  Discard empty strings as splitting result (before
+                   applying any converter).
+    converter      A list of functions to be applied to each token.
+                   If there are more token than converter, the last
+                   converter will be used for every remaining token.
+                   A converter may return None to indicate an error.
 
-    for response in responses:
-        send_responses(client, response)
+    Whitespace around the resulting tokens will be removed.
+    Return None if there has been an error.
+    """
+    def exec_converter(conv: Callable[[str], Any], arg: str) -> Any:
+        try:
+            result: Any = conv(arg)
+        except:
+            return None
+        return result
+
+    if string is None:
+        return None
+
+    parser: shlex.shlex = shlex.shlex(
+        instream = string, posix = True, punctuation_chars = False
+    )
+    # Do not handle comments.
+    parser.commenters = ''
+    # Split only on the characters specified as "whitespace".
+    parser.whitespace_split = True
+    if sep:
+        parser.whitespace = sep
+
+    try:
+        result: List[Any] = list(map(str.strip, parser))
+    except:
+        return None
+
+    if discard_empty:
+        result = list(filter(lambda s: s, result))
+
+    if exact_split > 0 and len(result) != exact_split:
+        return None
+
+    if converter:
+        # Apply converter if present.
+        len_result: int = len(result)
+        len_converter: int = len(converter)
+
+        if len_converter < len_result:
+            converter.extend(repeat(converter[-1], len_result - len_converter))
+
+        result = [
+            exec_converter(conv, token)
+            for (conv, token) in zip(converter, result)
+        ]
+
+    return result
