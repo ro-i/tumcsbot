@@ -37,7 +37,7 @@ class RenameStreams(CommandPlugin):
         stream_tuples: Optional[List[Any]] = split(
             message['command'], converter = [lambda t: split(t, sep = ',', exact_split = 2)]
         )
-        if stream_tuples is None:
+        if stream_tuples is None or None in stream_tuples:
             return Response.error(message)
 
         for old, new in stream_tuples:
