@@ -34,6 +34,7 @@ class Empty(Plugin):
                 )
                 or (
                     'command_name' not in event['message']
+                    and event['message']['sender_id'] != self.client.id
                     and 'mentioned' in event['flags']
                 )
             )
