@@ -67,11 +67,11 @@ class Group(CommandPlugin):
         Hi! :smile:
 
         I have the pleasure to announce some stream groups here.
-        You may subscribe to a stream group in order to automatically \
-        get subscribed to all streams belonging to this group. You will \
-        also be kept up-to-date when new streams are added to the group.
+        You may subscribe to a stream group in order to be automatically \
+        subscribed to all streams belonging to that group. Also, you \
+        will be kept updated when new streams are added to the group.
         Just react to this message with the emoji of the stream group \
-        you like to subscribe to. Remove your emoji to unsubscribe you \
+        you like to subscribe to. Remove your emoji to unsubscribe \
         from this group. (Note that this will not unsubscribe you from \
         the streams of this group.)
 
