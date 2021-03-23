@@ -154,6 +154,23 @@ class Client(ZulipClient):
                 commit = True
             )
 
+    def is_only_pm_recipient(self, message: Dict[str, Any]) -> bool:
+        """Check whether the bot is the only recipient of the given pm.
+
+        Check whether the message is a private message and the bot is
+        the only recipient.
+        """
+        if not message['type'] == 'private' or message['sender_id'] == self.id:
+            return False
+
+        # Note that the list of users who received the pm includes the sender.
+
+        recipients: List[Dict[str, Any]] = message['display_recipient']
+        if len(recipients) != 2:
+            return False
+
+        return self.id in [recipients[0]['id'], recipients[1]['id']]
+
     def private_stream_exists(self, stream_name: str) -> bool:
         """Check if there is a private stream with the given name.
 

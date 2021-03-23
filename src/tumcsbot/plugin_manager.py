@@ -102,7 +102,9 @@ class PluginManager(threading.local):
         if (event['type'] != 'message'
                 or event['message']['sender_id'] == self.client.id
                 or (event['message']['type'] != 'private' and not startswithping)
-                or (event['message']['type'] == 'private' and startswithping)):
+                or (event['message']['type'] == 'private' and (
+                    startswithping or not self.client.is_only_pm_recipient(event['message'])
+                ))):
             return event
 
         content: str

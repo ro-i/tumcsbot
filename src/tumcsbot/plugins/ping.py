@@ -9,12 +9,16 @@ from tumcsbot.lib import Response
 from tumcsbot.plugin import Plugin
 
 
-class Empty(Plugin):
-    """The user sent us an empty command.
+class Ping(Plugin):
+    """The user pinged us. Still be nice! :)
 
-    Still be nice! :)
+    Do not react on pings in private messages that do not contain a
+    command! Otherwise, we'll reach the API rate limit when we
+    subscribe a lot of users to a stream, the Notification Bot
+    notifies them of the subscription (with ping) and we react on the
+    messages of the Notification Bot to the users.
     """
-    plugin_name = 'empty'
+    plugin_name = 'ping'
     events = ['message']
 
     def handle_event(
@@ -29,6 +33,7 @@ class Empty(Plugin):
             event['type'] == 'message'
             and (
                 (
+                    # Only handle command messages if the command is empty.
                     'command_name' in event['message']
                     and not event['message']['command_name']
                 )
@@ -36,6 +41,8 @@ class Empty(Plugin):
                     'command_name' not in event['message']
                     and event['message']['sender_id'] != self.client.id
                     and 'mentioned' in event['flags']
+                    and (not event['message']['type'] == 'private'
+                         or self.client.is_only_pm_recipient(event['message']))
                 )
             )
         )
