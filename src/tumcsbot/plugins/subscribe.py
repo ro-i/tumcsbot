@@ -51,7 +51,8 @@ class Subscribe(CommandPlugin):
         _, args = result
 
         if not self.client.subscribe_all_from_stream_to_stream(
-                args.from_stream, args.to_stream, args.desc):
+                args.from_stream, args.to_stream,
+                args.desc if 'desc' in vars(args) else None):
             return Response.error(message)
 
         return Response.ok(message)
