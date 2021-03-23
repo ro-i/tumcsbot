@@ -45,7 +45,7 @@ class Subscribe(CommandPlugin):
         if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return Response.admin_err(message)
 
-        result = self.command_parser.parse('subscribe' + message['command'])
+        result = self.command_parser.parse('subscribe ' + message['command'])
         if result is None:
             return Response.command_not_found(message)
         _, args = result
