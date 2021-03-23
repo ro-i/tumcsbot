@@ -33,12 +33,17 @@ class CreateStreams(CommandPlugin):
         failed: List[str] = []
 
         stream_tuples: Optional[List[Any]] = split(
-            message['command'], converter = [lambda t: split(t, sep = ',', exact_split = 2)]
+            message['command'], converter = [lambda t: split(
+                t, sep = ',', exact_split = 2, discard_empty = False
+            )]
         )
         if stream_tuples is None or None in stream_tuples:
             return Response.error(message)
 
         for stream, desc in stream_tuples:
+            if not stream:
+                failed.append('one empty stream name')
+                continue
             result: Dict[str, Any] = self.client.add_subscriptions(
                 streams = [{'name': stream, 'description': desc}]
             )
