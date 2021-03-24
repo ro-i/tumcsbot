@@ -36,6 +36,8 @@ run_func () {
 	# enter virtual environment
 	. "${dest_dir}/venv/bin/activate"
 
+	upgrade_requirements_func
+
 	# execute bot
 	exec "${dest_dir}/src/main.py" "$@" "${dest_dir}/zuliprc" "${dest_dir}/tumcsbot.db"
 }
@@ -61,6 +63,11 @@ test_func () {
 	exec python3 -m unittest discover --start-directory "${dest_dir}/src"
 }
 
+upgrade_requirements_func () {
+	# upgrade all requirements
+	pip3 install -U -r "${dest_dir}/requirements.txt"
+}
+
 virtualenv_func () {
 	# create virtual environment
 	python3 -m venv "${dest_dir}/venv"
@@ -69,7 +76,7 @@ virtualenv_func () {
 	. "${dest_dir}/venv/bin/activate"
 
 	# install dependecies
-	pip3 install -r requirements.txt
+	pip3 install -r "${dest_dir}/requirements.txt"
 
 	# exit virtual environment
 	deactivate
@@ -110,6 +117,9 @@ case "$cmd" in
 		;;
 	'tests')
 		test_func "$@"
+		;;
+	'upgrade_requirements')
+		upgrade_requirements_func "$@"
 		;;
 	'virtualenv')
 		virtualenv_func "$@"

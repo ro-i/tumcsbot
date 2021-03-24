@@ -44,6 +44,10 @@ static_analysis:
 tests:
 	@bash -- manage.sh tests '$(dest_dir)'
 
+.PHONY: upgrade_requirements
+upgrade_requirements:
+	@bash -- manage.sh upgrade_requirements '$(dest_dir)'
+
 # install virtual environment
 .PHONY: virtualenv
 virtualenv:
