@@ -71,6 +71,9 @@ class AlertWordDaemon(SubBotPlugin):
         )
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
-        # Do not react on own messages.
+        # Do not react on own messages or on private messages where we
+        # are not the only recipient.
         return (event['type'] == 'message'
-                and cast(bool, event['message']['sender_id'] != self.client.id))
+                and event['message']['sender_id'] != self.client.id
+                and (event['message']['type'] == 'stream'
+                     or self.client.is_only_pm_recipient(event['message'])))
