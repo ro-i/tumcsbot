@@ -2,7 +2,7 @@ TUM CS Bot
 ==========
 
 An interactive bot for zulip.in.tum.de, the [Zulip Chat](https://zulipchat.com/)
-of the Department of Informatics of the Technichal University of Munich.
+of the Department of Informatics of the Technical University of Munich.
 
 **Note: This bot is currently under development and not yet production-ready!**
 
