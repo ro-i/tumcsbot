@@ -13,9 +13,10 @@ Client   A wrapper around zulip.Client.
 
 import logging
 import re
+import time
 
 from collections.abc import Iterable
-from typing import cast, Any, Callable, Dict, Iterable, List, Pattern, Optional, Union
+from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Union
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import DB, Response, MessageType
@@ -57,6 +58,35 @@ class Client(ZulipClient):
         self.register_params: Dict[str, Any] = {}
         self._db = DB()
         self._init_db()
+
+    def call_endpoint(
+        self,
+        url: Optional[str] = None,
+        method: str = "POST",
+        request: Optional[Dict[str, Any]] = None,
+        longpolling: bool = False,
+        files: Optional[List[IO[Any]]] = None,
+        timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Override zulip.Client.call_on_each_event.
+
+        This is the backend for almost all API-user facing methods.
+        Automatically resend requests if they failed because of the
+        API rate limit.
+        """
+        result: Dict[str, Any]
+
+        while True:
+            result = super().call_endpoint(url, method, request, longpolling, files, timeout)
+            if not (result['result'] == 'error'
+                    and 'code' in result
+                    and result['code'] == 'RATE_LIMIT_HIT'):
+                break
+            secs: float = result['retry-after'] if 'retry-after' in result else 1
+            logging.warning('hit API rate limit, waiting for %f seconds...', secs)
+            time.sleep(secs)
+
+        return result
 
     def call_on_each_event(
         self,
