@@ -27,10 +27,6 @@ from tumcsbot.plugin import PluginContext, CommandPlugin, Plugin, SubBotPlugin, 
 from tumcsbot.plugin_manager import PluginManager
 
 
-def sigterm_handler(signum: int, frame: Any) -> None:
-    raise SystemExit()
-
-
 class TumCSBot:
     """Main Bot class.
 
@@ -55,6 +51,7 @@ class TumCSBot:
         **kwargs: str
     ) -> None:
         self.executor: concurrent.futures.ThreadPoolExecutor
+        self.restart: bool = False
 
         if max_workers < 1:
             raise ValueError('max_workers must be >= 1')
@@ -108,7 +105,8 @@ class TumCSBot:
 
         # Register exit handler.
         atexit.register(self.exit_handler)
-        signal.signal(signal.SIGTERM, sigterm_handler)
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
+        signal.signal(signal.SIGUSR1, self.sig_restart_handler)
 
     def _event_callback(
         self,
@@ -142,3 +140,10 @@ class TumCSBot:
             event_types = self.events,
             all_public_streams = True
         )
+
+    def sigterm_handler(self, signum: int, frame: Any) -> None:
+        raise SystemExit()
+
+    def sig_restart_handler(self, signum: int, frame: Any) -> None:
+        self.restart = True
+        raise SystemExit()

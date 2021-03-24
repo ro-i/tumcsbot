@@ -54,9 +54,15 @@ def main() -> None:
     try:
         bot.run()
     except SystemExit:
+        pass
+
+    if bot.restart:
         print('Received termination request. Restarting: ' + str(sys.argv))
         bot.exit_handler()
         os.execv(sys.argv[0], sys.argv)
+    else:
+        print('Terminated.')
+
 
 if __name__ == '__main__':
     main()

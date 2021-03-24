@@ -25,8 +25,8 @@ class Restart(CommandPlugin):
         if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return Response.admin_err(message)
 
-        # Ask the parent process to exit.
-        os.kill(os.getpid(), signal.SIGTERM)
+        # Ask the parent process to restart.
+        os.kill(os.getpid(), signal.SIGUSR1)
 
         # dead code
         return Response.none()
