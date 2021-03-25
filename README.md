@@ -24,8 +24,9 @@ administrator and `api_super_user` rights.
 ([documentation for Zulip 3.x](https://github.com/zulip/zulip/blob/3.x/docs/production/security-model.md)).
 In order to grant those rights, run
 - `manage.py knight --for-real --permission=administer <bot_email>` (Zulip <= 3.2)
-- `manage.py change_user_role -r REALM_ID <bot_email> admin` and
+- `manage.py change_user_role -r REALM_ID <bot_email> admin` and\
   `manage.py change_user_role -r REALM_ID <bot_email> administrator`
+
 in the appropriate directory of your zulip server installation.
 
 
