@@ -10,8 +10,10 @@ Provide also an interactive command so administrators are able to
 change the alert words and specify the emojis to use for the reactions.
 """
 
+import re
+
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Match, Optional, Tuple, Union
 
 from tumcsbot.lib import CommandParser, DB, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
@@ -49,9 +51,21 @@ class AlertWord(CommandPlugin):
             table = 'Alerts', schema = '(Phrase text primary key, Emoji text not null)'
         )
         self.command_parser: CommandParser = CommandParser()
-        self.command_parser.add_subcommand('add', {'alert_phrase': str, 'emoji': str})
+        self.command_parser.add_subcommand('add', {
+            'alert_phrase': str, 'emoji': self._get_emoji_from_str
+        })
         self.command_parser.add_subcommand('remove', {'alert_phrase': str})
         self.command_parser.add_subcommand('list')
+
+    def _get_emoji_from_str(self, string: str) -> Optional[str]:
+        """Parse a emoji."""
+        match: Optional[Match[str]] = re.match(r'\s*:?([^:]+):?\s*', string)
+        if match is None:
+            return None
+        try:
+            return match.group(1)
+        except:
+            return None
 
     def handle_message(
         self,
