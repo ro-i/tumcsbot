@@ -7,11 +7,11 @@ import re
 import logging
 
 from inspect import cleandoc
-from typing import cast, Any, Callable, Dict, Iterable, List, Match, Optional, Pattern, Set, \
+from typing import cast, Any, Callable, Dict, Iterable, List, Optional, Pattern, Set, \
     Tuple, Union
 from sqlite3 import IntegrityError
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import CommandParser, DB, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -140,7 +140,7 @@ class Group(CommandPlugin):
         self.command_parser = CommandParser()
         self.command_parser.add_subcommand('subscribe', {'group_id': str})
         self.command_parser.add_subcommand('unsubscribe', {'group_id': str})
-        self.command_parser.add_subcommand('add', {'group_id': str, 'emoji': str})
+        self.command_parser.add_subcommand('add', {'group_id': str, 'emoji': Regex.get_emoji_name})
         self.command_parser.add_subcommand('remove', {'group_id': str})
         self.command_parser.add_subcommand(
             'add_streams', {'group_id': str, 'streams': str}, greedy = True
@@ -269,12 +269,9 @@ class Group(CommandPlugin):
         if '\n' in group_id:
             return Response.build_message(message, 'The group id must not contain newlines.')
 
-        emoji_match: Optional[Match[str]] = self._get_emoji.fullmatch(emoji)
-        if emoji_match is None:
-            return Response.build_message(message, 'Wrong emoji format.')
         try:
             self._db.execute(
-                self._insert_sql, group_id, emoji_match.group(1), '', commit = True
+                self._insert_sql, group_id, emoji, '', commit = True
             )
         except IntegrityError as e:
             return Response.build_message(message, str(e))

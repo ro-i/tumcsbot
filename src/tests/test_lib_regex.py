@@ -9,7 +9,13 @@ from tumcsbot.lib import Regex
 
 
 class RegexTest(unittest.TestCase):
+    emoji_names = [('test', 'test'), (':test:', 'test'), (':tes:t:', None),
+                   ('test:', None), (':test', None)]
     stream_names = ['test', 'abc def', '!/"§$& - ("!~EÜ']
+
+    def test_emoji_names(self) -> None:
+        for (string, emoji) in self.emoji_names:
+            self.assertEqual(Regex.get_emoji_name(string), emoji)
 
     def test_plain_stream_names(self) -> None:
         for s in self.stream_names:

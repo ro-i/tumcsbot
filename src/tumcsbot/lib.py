@@ -61,23 +61,55 @@ class Regex:
     OPT_ASTERISKS: Final[str] = r'(?:\*\*|)'
     STREAM: Final[str] = r'[^*#]+'
 
+    @staticmethod
+    def get_captured_string_from_match(
+        match: Optional[Match[str]],
+        capture_group_id: int
+    ) -> Optional[str]:
+        """Return the string of a capture group from a match.
+
+        Return None if the match is None or if there is no capture group
+        with the given index or if the expression of the capture group
+        in the original regular expression could not be matched.
+        """
+        if match is None:
+            return None
+        try:
+            return match.group(capture_group_id)
+        except:
+            return None
+
+    @classmethod
+    def get_emoji_name(cls, string: str) -> Optional[str]:
+        """Parse an emoji name from a given string.
+
+        Match the whole string.
+        Emoji names may be of the following forms:
+           <name>, :<name>:
+
+        Leading/trailing whitespace is discarded.
+        Return None if no match could be found.
+        """
+        match: Optional[Match[str]] = re.fullmatch(r'\s*(:[^:]+:|[^:]+)\s*', string)
+        emoji: Optional[str] = cls.get_captured_string_from_match(match, 1)
+        return emoji.strip(':') if emoji is not None else None
+
     @classmethod
     def get_stream_name(cls, string: str) -> Optional[str]:
         """Try hard to extract the stream name from a string.
 
+        Match the whole string.
         There are three cases handled here:
            abc -> abc, #abc -> abc, #**abc** -> abc
 
         Leading/trailing whitespace is discarded.
-        Return None if no match can be found.
+        Return None if no match could be found.
         """
-        match: Optional[Match[str]] = re.match(
+        match: Optional[Match[str]] = re.fullmatch(
             r'\s*#?{0}({1}){0}\s*'.format(Regex.OPT_ASTERISKS, Regex.STREAM),
             string, flags = re.I
         )
-        if match is None:
-            return match
-        return match.group(1)
+        return cls.get_captured_string_from_match(match, 1)
 
 
 class CommandParser:
