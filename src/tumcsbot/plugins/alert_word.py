@@ -31,8 +31,8 @@ class AlertWord(CommandPlugin):
         Add an alert word / phrase together with the emoji the bot \
         should use to react on messages containing the corresponding \
         alert phrase.
-        For the new alert phrases to take effect, you should restart \
-        the bot.
+        For the new alert phrases to take effect, please restart the \
+        bot.
         [administrator rights needed]
         """
     )
