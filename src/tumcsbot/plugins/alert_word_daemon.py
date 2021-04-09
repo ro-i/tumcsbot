@@ -11,7 +11,7 @@ its database table.
 
 import re
 
-from typing import cast, Any, Dict, Iterable, List, Optional, Pattern, Tuple, Union
+from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 from tumcsbot.lib import DB, Response
 from tumcsbot.plugin import PluginContext, SubBotPlugin
@@ -25,35 +25,34 @@ class AlertWordDaemon(SubBotPlugin):
     def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
         super().__init__(plugin_context)
         # Get pattern and the alert_phrase - emoji bindings.
-        (self._pattern, self._bindings) = self._build_pattern()
+        self._bindings: List[Tuple[Pattern[str], str]] = self._get_bindings()
         # Replace markdown links by their textual representation.
         self._markdown_links: Pattern[str] = re.compile(r'\[([^\]]*)\]\([^\)]+\)')
 
-    def _build_pattern(self) -> Tuple[Optional[Pattern[str]], Dict[str, str]]:
-        """Build a regex containing the alert phrases."""
+    def _get_bindings(self) -> List[Tuple[Pattern[str], str]]:
+        """Compile the regexes and bind them to their emojis."""
 
         # Get a database connection.
         self._db = DB()
 
-        try:
-            bindings: Dict[str, str] = dict(cast(
-                List[Tuple[str,str]], self._db.execute(self._select_sql)
-            ))
-        except:
-            return (None, {})
+        bindings: List[Tuple[Pattern[str], str]] = []
 
-        pattern: Pattern[str] = re.compile('({})'.format(
-            '|'.join(map(re.escape, bindings.keys()))
-        ))
+        # Verify every regex and only use the valid ones.
+        for regex, emoji in self._db.execute(self._select_sql):
+            try:
+                pattern: Pattern[str] = re.compile(regex)
+            except re.error:
+                continue
+            bindings.append((pattern, emoji))
 
-        return (pattern, bindings)
+        return bindings
 
     def handle_event(
         self,
         event: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if not self._pattern or not self._bindings:
+        if not self._bindings:
             return Response.none()
 
         # Get message content.
@@ -63,12 +62,11 @@ class AlertWordDaemon(SubBotPlugin):
             .sub(r'\1', event['message']['content'])\
             .lower()
 
-        return map(
-            lambda phrase: Response.build_reaction(
-                message = event['message'], emoji = self._bindings[phrase]
-            ),
-            set(self._pattern.findall(content))
-        )
+        return [
+            Response.build_reaction(message = event['message'], emoji = emoji)
+            for pattern, emoji in self._bindings
+            if pattern.search(content) is not None
+        ]
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         # Do not react on own messages or on private messages where we
