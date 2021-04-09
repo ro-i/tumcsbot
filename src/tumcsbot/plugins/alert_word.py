@@ -76,7 +76,7 @@ class AlertWord(CommandPlugin):
             result_sql = self._db.execute(self._list_sql)
             response: str = 'Alert word or phrase | Emoji\n---- | ----'
             for (phrase, emoji) in result_sql:
-                response += '\n{0} | {1} :{1}:'.format(phrase, emoji)
+                response += '\n`{0}` | {1} :{1}:'.format(phrase, emoji)
             return Response.build_message(message, response)
 
         # Use lowercase -> no need for case insensitivity.
