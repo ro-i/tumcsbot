@@ -21,8 +21,8 @@ class AlertWord(CommandPlugin):
     plugin_name = 'alert_word'
     syntax = cleandoc(
         """
-        alert_word add <alert phrase> <emoji>
-          or alert_word remove <alert phrase>
+        alert_word add '<alert phrase>' <emoji>
+          or alert_word remove '<alert phrase>'
           or alert_word list
         """
     )
@@ -33,6 +33,8 @@ class AlertWord(CommandPlugin):
         alert phrase.
         For the new alert phrases to take effect, please restart the \
         bot.
+        Note that an alert phrase may be any regular expression.
+        Hint: `\\b` represents word boundaries.
         [administrator rights needed]
         """
     )
