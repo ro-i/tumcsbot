@@ -27,6 +27,30 @@ from tumcsbot.plugin import PluginContext, CommandPlugin, Plugin, SubBotPlugin, 
 from tumcsbot.plugin_manager import PluginManager
 
 
+class RootClient(Client):
+    """Enhanced Client class with additional functionality.
+
+    Particularly, this client initializes the Client's database tables.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Enhance the constructor of the parent class."""
+        super().__init__(*args, **kwargs)
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize some tables of the database."""
+        self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
+        # Clear table to prevent deprecated information.
+        self._db.execute('delete from PublicStreams')
+        stream_names: List[str] = self.get_public_stream_names(use_db = False)
+        for s in stream_names:
+            self._db.execute(
+                'insert or ignore into PublicStreams(StreamName) values (?)', s,
+                commit = True
+            )
+
+
 class TumCSBot:
     """Main Bot class.
 
@@ -68,12 +92,12 @@ class TumCSBot:
         # Init database handler.
         lib.DB.path = db_path
 
-        # Init Zulip client.
-        self.client: Client = Client(config_file = zuliprc)
+        # Init own Zulip client.
+        self.client: RootClient = RootClient(config_file = zuliprc)
 
         # Init plugin context.
         plugin_context: PluginContext = PluginContext(
-            client = self.client, zuliprc = zuliprc,
+            client = Client(config_file = zuliprc), zuliprc = zuliprc,
             command_plugin_classes = CommandPlugin.get_implementing_classes()
         )
 

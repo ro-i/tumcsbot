@@ -7,7 +7,7 @@
 
 Classes:
 --------
-Client   A wrapper around zulip.Client.
+Client   A wrapper around zulip.Client to be used by the plugins.
          See the class doc for the additional attributes and methods.
 """
 
@@ -57,7 +57,6 @@ class Client(ZulipClient):
         self.ping_len: int = len(self.ping)
         self.register_params: Dict[str, Any] = {}
         self._db = DB()
-        self._init_db()
 
     def call_endpoint(
         self,
@@ -173,16 +172,6 @@ class Client(ZulipClient):
                 return cast(str, stream['name'])
 
         return None
-
-    def _init_db(self) -> None:
-        """Initialize some tables of the database."""
-        self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
-        stream_names: List[str] = self.get_public_stream_names(use_db = False)
-        for s in stream_names:
-            self._db.execute(
-                'insert or ignore into PublicStreams(StreamName) values (?)', s,
-                commit = True
-            )
 
     def is_only_pm_recipient(self, message: Dict[str, Any]) -> bool:
         """Check whether the bot is the only recipient of the given pm.
