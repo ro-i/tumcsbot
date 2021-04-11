@@ -33,21 +33,27 @@ class AutoSubscriber(Plugin):
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         return (super().is_responsible(event)
-                and event['op'] == 'create')
+                and (event['op'] == 'create' or event['op'] == 'update'))
 
     def handle_event(
         self,
         event: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        """Do the actual subscribing."""
-        for stream in event['streams']:
-            if stream['invite_only']:
-                continue
-            try:
-                self._db.execute(self._insert_sql, stream['name'], commit = True)
-            except Exception as e:
-                logging.exception(e)
-            self.client.subscribe_users([self.client.id], stream['name'])
+        if event['op'] == 'create':
+            for stream in event['streams']:
+                self._subscribe(stream['name'], stream['invite_only'])
+        elif event['op'] == 'update':
+            self._subscribe(event['name'], self.client.private_stream_exists(event['name']))
 
         return Response.none()
+
+    def _subscribe(self, stream_name: str, private: bool) -> None:
+        """Do the actual subscribing."""
+        if private:
+            return
+        try:
+            self._db.execute(self._insert_sql, stream_name, commit = True)
+        except Exception as e:
+            logging.exception(e)
+        self.client.subscribe_users([self.client.id], stream_name)
