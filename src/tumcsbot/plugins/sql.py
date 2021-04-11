@@ -12,10 +12,16 @@ from tumcsbot.plugin import CommandPlugin, PluginContext
 
 class Source(CommandPlugin):
     plugin_name = 'sql'
-    syntax = 'sql <sql_script>'
+    syntax = cleandoc(
+        """
+        sql <sql_script>
+          or sql list
+        """
+    )
     description = cleandoc(
         """
         Access the internal database of the bot read-only.
+        The `list` command is a shortcut to list all tables.
         [administrator rights needed]
         """
     )
