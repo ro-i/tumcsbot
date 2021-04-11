@@ -31,9 +31,6 @@ class AutoSubscriber(Plugin):
         super().__init__(plugin_context)
         self._db = DB()
         self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
-        # Ensure that we are subscribed to all existing streams.
-        for stream_name in self.client.get_public_stream_names():
-            self._handle_stream(stream_name, False)
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         return (super().is_responsible(event)
