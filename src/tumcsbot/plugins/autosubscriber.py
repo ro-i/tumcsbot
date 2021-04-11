@@ -33,7 +33,8 @@ class AutoSubscriber(Plugin):
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         return (super().is_responsible(event)
-                and (event['op'] == 'create' or event['op'] == 'update'))
+                and (event['op'] == 'create' or
+                     (event['op'] == 'update' and event['property'] == 'invite_only')))
 
     def handle_event(
         self,
