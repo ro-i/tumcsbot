@@ -22,6 +22,7 @@ from argparse import Namespace
 from enum import Enum
 from inspect import cleandoc
 from itertools import repeat
+from os.path import isabs
 from typing import Any, Callable, Dict, Final, List, Match, Optional, Tuple, Union
 
 
@@ -206,14 +207,27 @@ class DB:
 
     path: Optional[str] = None
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, read_only: bool = False, **kwargs: Any) -> None:
         """Initialize the database connection.
+
+        Arguments:
+        ----------
+        read_only     Opens a read-only database connection.
 
         *args and **kwargs are forwarded to sqlite.connect().
         """
         if not DB.path:
             raise ValueError('no path to database given')
-        self.connection = sqlite.connect(DB.path, *args, **kwargs)
+        if not isabs(DB.path):
+            raise ValueError('path to database is not absolute')
+
+        self.read_only: bool = read_only
+        if self.read_only:
+            kwargs.update(uri = True)
+            self.connection = sqlite.connect('file:' + DB.path + '?mode=ro', *args, **kwargs)
+        else:
+            self.connection = sqlite.connect(DB.path, *args, **kwargs)
+
         self.cursor = self.connection.cursor()
         # Switch on foreign key support.
         self.execute('pragma foreign_keys = on')
@@ -247,7 +261,7 @@ class DB:
         except sqlite.Error as e:
             self.connection.rollback()
             raise e
-        if commit:
+        if commit and not self.read_only:
             self.connection.commit()
         return result.fetchall()
 
