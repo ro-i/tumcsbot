@@ -57,6 +57,9 @@ class Client(ZulipClient):
         self.ping_len: int = len(self.ping)
         self.register_params: Dict[str, Any] = {}
         self._db = DB()
+        self._db.checkout_table(
+            'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
+        )
 
     def call_endpoint(
         self,
@@ -318,33 +321,41 @@ class Client(ZulipClient):
 #    def subscribe_user(
 #        self,
 #        user_id: int,
-#        stream: Dict[str, Any]
-#    ) -> None:
-#        """Subscribe a user to a stream if the user is not yet subscribed.
+#        stream_name: str
+#    ) -> bool:
+#        """Subscribe a user to a public stream.
 #
-#        The Argument "stream" is a stream object as returned by a
-#        "stream-add" event.
+#        The subscription is only executed if the user is not yet
+#        subscribed to the stream with the given name.
 #        See docs: https://zulip.com/api/get-events#stream-add.
 #        Do not subscribe to private streams.
+#
+#        Return True if the user has already subscribed to the given
+#        stream or if they now are subscribed and False otherwise.
 #        """
 #        result: Dict[str, Any]
 #
-#        if stream['invite_only']:
-#            return
+#        if self.private_stream_exists(stream_name):
+#            return False
 #
-#        # Check whether the user already is subscribed to that stream.
+#        result = self.get_stream_id(stream_name)
+#        if result['result'] != 'success':
+#            return False
+#        stream_id: int = result['stream_id']
+#
+#        # Check whether the user has already subscribed to that stream.
 #        result = self.call_endpoint(
-#            url = '/users/{}/subscriptions/{}'.format(user_id, stream['stream_id']),
+#            url = '/users/{}/subscriptions/{}'.format(user_id, stream_id),
 #            method = 'GET'
 #        )
 #        # If the request failed, we try to subscribe anyway.
 #        if result['result'] == 'success' and result['is_subscribed']:
-#            return
+#            return True
 #        elif result['result'] != 'success':
-#            logging.warning(
-#                'failed subscription status check, stream_id %s', stream['stream_id']
-#            )
+#            logging.warning('failed subscription status check, stream_id %s', stream_id)
 #
-#        result = self.add_subscriptions(streams = [{'name': stream['name']}])
-#        if result['result'] != 'success':
+#        success: bool = self.subscribe_users([user_id], stream_name)
+#        if not success:
 #            logging.warning('cannot subscribe %s to stream: %s', user_id, str(result))
+#
+#        return success

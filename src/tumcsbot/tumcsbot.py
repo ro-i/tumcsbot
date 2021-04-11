@@ -15,7 +15,7 @@ import concurrent.futures
 import logging
 import signal
 
-from typing import cast, Any, Dict, List, Optional, Type
+from typing import cast, Any, Dict, Iterable, List, Optional, Tuple, Type
 
 import tumcsbot.lib as lib
 # This import is necessary.
@@ -40,13 +40,24 @@ class RootClient(Client):
 
     def _init_db(self) -> None:
         """Initialize some tables of the database."""
-        self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
+        self._db.checkout_table(
+            'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
+        )
+        # Get previous data.
+        old_streams: Dict[str, int] = dict(cast(Iterable[Tuple[str, int]], self._db.execute(
+            'select StreamName, Subscribed from PublicStreams'
+        )))
         # Clear table to prevent deprecated information.
         self._db.execute('delete from PublicStreams')
+
+        # Fill in current data.
         stream_names: List[str] = self.get_public_stream_names(use_db = False)
-        for s in stream_names:
+        for stream_name in stream_names:
+            subscribed: bool = False
+            if stream_name in old_streams and old_streams[stream_name] == 1:
+                subscribed = True
             self._db.execute(
-                'insert or ignore into PublicStreams(StreamName) values (?)', s,
+                'insert or ignore into PublicStreams values (?, ?)', stream_name, subscribed,
                 commit = True
             )
 

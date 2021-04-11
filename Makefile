@@ -29,6 +29,10 @@ init: database virtualenv
 database:
 	@bash -- manage.sh database '$(dest_dir)'
 
+# apply database migrations
+migrations:
+	@bash -- manage.sh migrations '$(dest_dir)'
+
 # run only mypy, not all static_analysis
 .PHONY: mypy
 mypy:

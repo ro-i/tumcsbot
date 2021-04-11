@@ -80,7 +80,7 @@ message dynamically by using appropriate attributes every plugin has to
 provide.
 
 In order to apply database migration scripts conveniently, there is the script
-`src/migrate.py`.
+`src/migrate.py` (see also `make migrations`).
 
 
 additional `make` targets
@@ -88,6 +88,8 @@ additional `make` targets
 - `make tests` runs some unit tests.
 - `make mypy` runs `mypy --strict` and should not show any issue.
 - `make static_analysis` currently runs `mypy` and `pylint`.
+- `make migrations` applies the migrations in `migrations.sql` to the database
+  `tumcsbot.db` using the script `src/migrate.py`.
 
 
 model

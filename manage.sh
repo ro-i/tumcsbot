@@ -27,6 +27,10 @@ database_func () {
 	chmod 0600 "$db"
 }
 
+migrations_func () {
+	"${dest_dir}/src/migrate.py" "${dest_dir}/tumcsbot.db" "${dest_dir}/migrations.sql"
+}
+
 mypy_func () {
 	_command_exists_or_exit mypy
 	mypy --strict "${dest_dir}/src"
@@ -105,6 +109,9 @@ case "$cmd" in
 		;;
 	'database')
 		database_func "$@"
+		;;
+	'migrations')
+		migrations_func "$@"
 		;;
 	'mypy')
 		mypy_func "$@"

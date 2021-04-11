@@ -24,13 +24,22 @@ from tumcsbot.plugin import Plugin, PluginContext
 class AutoSubscriber(Plugin):
     plugin_name = 'autosubscriber'
     events = ['stream']
-    _insert_sql: str = 'insert or ignore into PublicStreams values (?)'
+    _insert_sql: str = 'insert or ignore into PublicStreams values (?, 0)'
+    _select_sql: str = 'select StreamName, Subscribed from PublicStreams'
+    _subscribe_sql: str = 'update PublicStreams set Subscribed = 1 where StreamName = ?'
     _remove_sql: str = 'delete from PublicStreams where StreamName = ?'
 
     def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
         super().__init__(plugin_context)
         self._db = DB()
-        self._db.checkout_table('PublicStreams', '(StreamName text primary key)')
+        self._db.checkout_table(
+            'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
+        )
+        # Ensure that we are subscribed to all existing streams.
+        for stream_name, subscribed in self._db.execute(self._select_sql):
+            if subscribed == 1:
+                continue
+            self._handle_stream(stream_name, False)
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         return (super().is_responsible(event)
@@ -78,7 +87,13 @@ class AutoSubscriber(Plugin):
         except Exception as e:
             logging.exception(e)
 
-        self.client.subscribe_users([self.client.id], stream_name)
+        if self.client.subscribe_users([self.client.id], stream_name):
+            try:
+                self._db.execute(self._subscribe_sql, stream_name, commit = True)
+            except Exception as e:
+                logging.exception(e)
+        else:
+            logging.warning('could not subscribe to %s', stream_name)
 
     def _remove_stream_from_table(self, stream_name: str) -> None:
         """Remove the given stream name from the PublicStreams table."""
