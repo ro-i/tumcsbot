@@ -19,6 +19,7 @@ class Source(CommandPlugin):
         [administrator rights needed]
         """
     )
+    _list_sql: str = 'select * from sqlite_master where type = "table"'
 
     def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
         super().__init__(plugin_context)
@@ -30,11 +31,16 @@ class Source(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
+        result_sql: List[Tuple[Any, ...]]
+
         if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
             return Response.admin_err(message)
 
         try:
-            result_sql: List[Tuple[Any, ...]] = self._db.execute(message['command'])
+            if message['command'] == 'list':
+                result_sql = self._db.execute(self._list_sql)
+            else:
+                result_sql = self._db.execute(message['command'])
         except Exception as e:
             return Response.build_message(message, str(e))
 
