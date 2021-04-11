@@ -45,17 +45,19 @@ class AutoSubscriber(Plugin):
         event: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if event['op'] == 'create' or event['op'] == 'delete':
+        if event['op'] == 'create':
             for stream in event['streams']:
                 self._handle_stream(stream['name'], stream['invite_only'])
+        elif event['op'] == 'delete':
+            for stream in event['streams']:
+                self._remove_stream_from_table(stream['name'])
         elif event['op'] == 'update':
             if event['property'] == 'invite_only':
                 self._handle_stream(event['name'], event['value'])
             elif (event['property'] == 'name' and not
                   self.client.private_stream_exists(event['name'])):
-                # Remove the previous stream name from the database by
-                # declaring the stream as "private".
-                self._handle_stream(event['name'], True)
+                # Remove the previous stream name from the database.
+                self._remove_stream_from_table(event['name'])
                 # Add the new stream name.
                 self._handle_stream(event['value'], False)
 
@@ -68,10 +70,7 @@ class AutoSubscriber(Plugin):
         up-to-date.
         """
         if private:
-            try:
-                self._db.execute(self._remove_sql, stream_name, commit = True)
-            except Exception as e:
-                logging.exception(e)
+            self._remove_stream_from_table(stream_name)
             return
 
         try:
@@ -80,3 +79,10 @@ class AutoSubscriber(Plugin):
             logging.exception(e)
 
         self.client.subscribe_users([self.client.id], stream_name)
+
+    def _remove_stream_from_table(self, stream_name: str) -> None:
+        """Remove the given stream name from the PublicStreams table."""
+        try:
+            self._db.execute(self._remove_sql, stream_name, commit = True)
+        except Exception as e:
+            logging.exception(e)
