@@ -25,6 +25,7 @@ class AutoSubscriber(Plugin):
     plugin_name = 'autosubscriber'
     events = ['stream']
     _insert_sql: str = 'insert into PublicStreams values (?)'
+    _remove_sql: str = 'delete from PublicStreams where StreamName = ?'
 
     def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
         super().__init__(plugin_context)
@@ -33,28 +34,49 @@ class AutoSubscriber(Plugin):
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
         return (super().is_responsible(event)
-                and (event['op'] == 'create' or
-                     (event['op'] == 'update' and event['property'] == 'invite_only')))
+                and (
+                    event['op'] == 'create'
+                    or event['op'] == 'update'
+                    or event['op'] == 'delete'
+                ))
 
     def handle_event(
         self,
         event: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if event['op'] == 'create':
+        if event['op'] == 'create' or event['op'] == 'delete':
             for stream in event['streams']:
-                self._subscribe(stream['name'], stream['invite_only'])
+                self._handle_stream(stream['name'], stream['invite_only'])
         elif event['op'] == 'update':
-            self._subscribe(event['name'], self.client.private_stream_exists(event['name']))
+            if event['property'] == 'invite_only':
+                self._handle_stream(event['name'], event['value'])
+            elif (event['property'] == 'name' and not
+                  self.client.private_stream_exists(event['name'])):
+                # Remove the previous stream name from the database by
+                # declaring the stream as "private".
+                self._handle_stream(event['name'], True)
+                # Add the new stream name.
+                self._handle_stream(event['value'], False)
 
         return Response.none()
 
-    def _subscribe(self, stream_name: str, private: bool) -> None:
-        """Do the actual subscribing."""
+    def _handle_stream(self, stream_name: str, private: bool) -> None:
+        """Do the actual subscribing.
+
+        Additionally, keep the list of public streams in the database
+        up-to-date.
+        """
         if private:
+            try:
+                self._db.execute(self._remove_sql, stream_name, commit = True)
+            except Exception as e:
+                logging.exception(e)
             return
+
         try:
             self._db.execute(self._insert_sql, stream_name, commit = True)
         except Exception as e:
             logging.exception(e)
+
         self.client.subscribe_users([self.client.id], stream_name)
