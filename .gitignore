@@ -1,5 +1,5 @@
 **/*.disabled
-**/zuliprc
+**/*zuliprc
 **/__pycache__
 **/.mypy_cache
 *.db*
