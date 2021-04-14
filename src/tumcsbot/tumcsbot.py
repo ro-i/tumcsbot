@@ -54,6 +54,9 @@ class RootClient(Client):
         stream_names: List[str] = self.get_public_stream_names(use_db = False)
         for stream_name in stream_names:
             subscribed: bool = False
+            # We do not compare the streams using lib.stream_names_equal here,
+            # because we store the stream names in the database as we receive
+            # them from Zulip. There is no user interaction involved.
             if stream_name in old_streams and old_streams[stream_name] == 1:
                 subscribed = True
             self._db.execute(

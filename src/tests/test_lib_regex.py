@@ -5,38 +5,35 @@
 
 import unittest
 
+from typing import List, Optional, Tuple
+
 from tumcsbot.lib import Regex
 
 
 class RegexTest(unittest.TestCase):
-    emoji_names = [('test', 'test'), (':test:', 'test'), (':tes:t:', None),
-                   ('test:', None), (':test', None)]
-    stream_names = ['test', 'abc def', '!/"§$& - ("!~EÜ']
+    emoji_names: List[Tuple[str, Optional[str]]] = [
+        ('test', 'test'), (':test:', 'test'), (':tes:t:', None), ('test:', None), (':test', None)
+    ]
+    stream_names: List[Tuple[str, Optional[str]]] = [
+        ('test', 'test'), ('abc def', 'abc def'), ('!/"§$& - ("!~EÜ', '!/"§$& - ("!~EÜ'),
+        ('#**test**', 'test'), ('#*test*', '#*test*'), ('#**test*', '#**test*'),
+        ('#*test**', '#*test**')
+    ]
+    user_names: List[Tuple[str, Optional[str]]] = [
+        ('John Doe', 'John Doe'), ('John', 'John'), ('John Multiple Doe', 'John Multiple Doe'),
+        ('@**John**', 'John'), ('@_**John Doe**', 'John Doe'), ('@*John*', None),
+        ('@_*John*', None), ('@John**', None), ('@_John**', None), ('@**John', None),
+        ('@_**John', None), ('Jo\\hn', None), ('@**J\\n**', None), ('@_**John D"e**', None)
+    ]
 
     def test_emoji_names(self) -> None:
         for (string, emoji) in self.emoji_names:
             self.assertEqual(Regex.get_emoji_name(string), emoji)
 
-    def test_plain_stream_names(self) -> None:
-        for s in self.stream_names:
-            self.assertEqual(Regex.get_stream_name(s), s)
+    def test_stream_names(self) -> None:
+        for (string, stream_name) in self.stream_names:
+            self.assertEqual(Regex.get_stream_name(string), stream_name)
 
-    def test_hash_stream_name(self) -> None:
-        for s in self.stream_names:
-            s_h: str = '#' + s
-            self.assertEqual(Regex.get_stream_name(s_h), s)
-
-    def test_link_stream_name(self) -> None:
-        for s in self.stream_names:
-            s_l: str = '#**%s**' % s
-            self.assertEqual(Regex.get_stream_name(s_l), s)
-
-    def test_invalid_stream_name_1(self) -> None:
-        for s in self.stream_names:
-            s_h: str = '#*%s*' % s
-            self.assertIsNone(Regex.get_stream_name(s_h))
-
-    def test_strange_format_stream_name_2(self) -> None:
-        for s in self.stream_names:
-            s_l: str = '**%s**' % s
-            self.assertEqual(Regex.get_stream_name(s_l), s)
+    def test_user_names(self) -> None:
+        for (string, user_name) in self.user_names:
+            self.assertEqual(Regex.get_user_name(string), user_name)

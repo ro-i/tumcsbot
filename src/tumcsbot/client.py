@@ -19,7 +19,7 @@ from collections.abc import Iterable
 from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Union
 from zulip import Client as ZulipClient
 
-from tumcsbot.lib import DB, Response, MessageType
+from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
 
 
 class Client(ZulipClient):
@@ -145,13 +145,16 @@ class Client(ZulipClient):
         """Get the names of all public streams matching a regex.
 
         The regex has to match the full stream name.
+        Note that Zulip handles stream names case insensitively at the
+        moment.
+
         Return an empty list if the regex is not valid.
         """
         if not regex:
             return []
 
         try:
-            pat: Pattern[str] = re.compile(regex)
+            pat: Pattern[str] = re.compile(regex, flags = re.I)
         except re.error:
             return []
 
@@ -205,7 +208,7 @@ class Client(ZulipClient):
             return False # TODO?
 
         for stream in result['streams']:
-            if stream['name'] == stream_name:
+            if stream_names_equal(stream['name'], stream_name):
                 return bool(stream['invite_only'])
 
         return False

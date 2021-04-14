@@ -7,11 +7,17 @@
 
 Classes:
 --------
-Regex        Some widely used regular expressions.
-MessageType  Enum describing the type of a message.
-DB           Simple sqlite wrapper.
-Helper       Collect docs of interactive commands.
-Response     Provide Response building methods.
+MessageType     Enum describing the type of a message.
+Regex           Some widely used regex methods.
+CommandParser   A simple positional argument parser.
+Conf            Manage the bot's configuration variables.
+DB              Simple sqlite wrapper.
+Response        Provide Response building methods.
+
+Functions:
+----------
+split               Similar to the default split, but respects quotes.
+stream_names_equal  Decide whether two stream names are equal.
 """
 
 import re
@@ -23,7 +29,7 @@ from enum import Enum
 from inspect import cleandoc
 from itertools import repeat
 from os.path import isabs
-from typing import Any, Callable, Dict, Final, List, Match, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Final, List, Match, Optional, Pattern, Tuple, Union
 
 
 LOGGING_FORMAT: str = (
@@ -52,15 +58,29 @@ class MessageType(StrEnum):
 
 
 class Regex:
-    """Some widely used regular expressions and methods using them.
+    """Some widely used regex methods."""
 
-    OPT_ASTERISKS  Match optional asterisks enclosing autocompleted
-                   stream or user names.
-    STREAM         Match a stream name.
-    """
-
-    OPT_ASTERISKS: Final[str] = r'(?:\*\*|)'
-    STREAM: Final[str] = r'[^*#]+'
+    _ASTERISKS: Final[Pattern[str]] = re.compile(r'(?:\*\*)')
+    _OPT_ASTERISKS: Final[Pattern[str]] = re.compile(
+        r'(?:{}|)'.format(_ASTERISKS)
+    )
+    _EMOJI: Final[Pattern[str]] = re.compile(r'[^:]+')
+    _EMOJI_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
+        r':({}):'.format(_EMOJI.pattern)
+    )
+    # Note: Currently, there are no further restrictions on stream names posed
+    # by Zulip. That is why we cannot enforce sensible restrictions here.
+    _STREAM: Final[Pattern[str]] = re.compile(r'.+')
+    _STREAM_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'#{0}({1}){0}'.format(_ASTERISKS.pattern, _STREAM.pattern)
+    )
+    _USER: Final[Pattern[str]] = re.compile(r'[^\*\`\\\>\"\@]+')
+    _USER_LINKED_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'@_{0}({1}){0}'.format(_ASTERISKS.pattern, _USER.pattern)
+    )
+    _USER_MENTIONED_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'@{0}({1}){0}'.format(_ASTERISKS.pattern, _USER.pattern)
+    )
 
     @staticmethod
     def get_captured_string_from_match(
@@ -81,8 +101,32 @@ class Regex:
             return None
 
     @classmethod
+    def get_captured_string_from_pattern_or(
+        cls,
+        patterns: List[Tuple[Pattern[str], int]],
+        string: str
+    ) -> Optional[str]:
+        """Extract a substring from a string.
+
+        Walk through the provided patterns, find the first that matchs
+        the given string (fullmatch) and extract the capture group with
+        the given id.
+        """
+        match: Optional[Match[str]] = None
+
+        for (pattern, group_id) in patterns:
+            match = pattern.fullmatch(string)
+            if match is not None:
+                break
+
+        if match is None:
+            return None
+
+        return cls.get_captured_string_from_match(match, group_id)
+
+    @classmethod
     def get_emoji_name(cls, string: str) -> Optional[str]:
-        """Parse an emoji name from a given string.
+        """Extract the emoji name from a string.
 
         Match the whole string.
         Emoji names may be of the following forms:
@@ -91,26 +135,40 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        match: Optional[Match[str]] = re.fullmatch(r'\s*(:[^:]+:|[^:]+)\s*', string)
-        emoji: Optional[str] = cls.get_captured_string_from_match(match, 1)
-        return emoji.strip(':') if emoji is not None else None
+        return cls.get_captured_string_from_pattern_or(
+            [(cls._EMOJI_AUTOCOMPLETED_CAPTURE, 1), (cls._EMOJI, 0)], string.strip()
+        )
 
     @classmethod
     def get_stream_name(cls, string: str) -> Optional[str]:
-        """Try hard to extract the stream name from a string.
+        """Extract the stream name from a string.
 
         Match the whole string.
-        There are three cases handled here:
-           abc -> abc, #abc -> abc, #**abc** -> abc
+        There are two cases handled here:
+           abc -> abc, #**abc** -> abc
 
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        match: Optional[Match[str]] = re.fullmatch(
-            r'\s*#?{0}({1}){0}\s*'.format(Regex.OPT_ASTERISKS, Regex.STREAM),
-            string, flags = re.I
+        return cls.get_captured_string_from_pattern_or(
+            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, 1), (cls._STREAM, 0)], string.strip()
         )
-        return cls.get_captured_string_from_match(match, 1)
+
+    @classmethod
+    def get_user_name(cls, string: str) -> Optional[str]:
+        """Extract the user name from a string.
+
+        Match the whole string.
+        There are three cases handled here:
+           abc -> abc, @**abc** -> abc, @_**abc** -> abc
+
+        Leading/trailing whitespace is discarded.
+        Return None if no match could be found.
+        """
+        return cls.get_captured_string_from_pattern_or(
+            [(cls._USER_MENTIONED_CAPTURE, 1), (cls._USER_LINKED_CAPTURE, 1), (cls._USER, 0)],
+            string.strip()
+        )
 
 
 class CommandParser:
@@ -566,3 +624,11 @@ def split(
         ]
 
     return result
+
+
+def stream_names_equal(stream_name1: str, stream_name2: str) -> bool:
+    """Decide whether two stream names are equal.
+
+    Currently, Zulip considers stream names to be case insensitive.
+    """
+    return stream_name1.casefold() == stream_name2.casefold()
