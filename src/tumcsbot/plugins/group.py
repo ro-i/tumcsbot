@@ -17,6 +17,7 @@ from tumcsbot.plugin import PluginContext, CommandPlugin
 
 class Group(CommandPlugin):
     plugin_name = 'group'
+    events = ['message', 'reaction']
     syntax = cleandoc(
         """
         group (un)subscribe <group_id>
