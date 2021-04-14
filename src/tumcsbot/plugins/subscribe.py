@@ -26,7 +26,7 @@ class Subscribe(CommandPlugin):
         """
     )
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(

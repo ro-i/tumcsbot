@@ -13,7 +13,7 @@ PluginManager
 import logging
 import threading
 
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, List, Optional, Type
 
 from tumcsbot.client import Client
 from tumcsbot.plugin import PluginContext, Plugin
@@ -26,11 +26,7 @@ class PluginManager(threading.local):
     within the same thread.
     (See https://github.com/python/cpython/blob/master/Lib/_threading_local.py)
     """
-    def __init__(
-        self,
-        plugin_classes: List[Type[Plugin]],
-        **kwargs: Any
-    ) -> None:
+    def __init__(self, plugin_classes: List[Type[Plugin]]) -> None:
         """Initialize plugin manager.
 
         Arguments:
@@ -38,28 +34,30 @@ class PluginManager(threading.local):
         plugin_classes    The plugins to instantiate per thread.
         """
         super().__init__()
+        self.client: Optional[Client] = None
         self.plugin_classes: List[Type[Plugin]] = plugin_classes
         self.plugins: List[Plugin] = []
 
-    def instantiate(
-        self,
-        plugin_context: PluginContext,
-        *args: Any
-    ) -> None:
-        """Do the per-thread instantiation of the plugins.
+    def instantiate(self, plugin_context: PluginContext) -> None:
+        """Per-thread instantiation of the plugin manager / the plugins.
 
         Pass kwargs to the constructor of the plugin classes in
         addition to the reference to the internal client instance.
         """
         # Get own per-thread client instance.
-        plugin_context.client = Client(config_file = plugin_context.zuliprc)
-        self.client: Client = plugin_context.client
+        self.client = Client(config_file = plugin_context.zuliprc)
+        own_plugin_context: PluginContext = PluginContext(
+            self.client, plugin_context.zuliprc, plugin_context.command_plugin_classes
+        )
         self.plugins = [
-            plugin_class(plugin_context) for plugin_class in self.plugin_classes
+            plugin_class(own_plugin_context) for plugin_class in self.plugin_classes
         ]
 
     def event_callback(self, event: Dict[str, Any]) -> None:
         """Process one event."""
+        if self.client is None:
+            raise ValueError('client is not initialized; this should never happen')
+
         logging.debug('received event %s', str(event))
 
         try:
@@ -94,6 +92,9 @@ class PluginManager(threading.local):
           command          The command without the name.
         """
         startswithping: bool = False
+
+        if self.client is None:
+            raise ValueError('client is not initialized; this should never happen')
 
         if (event['type'] == 'message'
                 and event['message']['content'].startswith(self.client.ping)):

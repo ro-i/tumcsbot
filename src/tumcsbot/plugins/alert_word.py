@@ -42,7 +42,7 @@ class AlertWord(CommandPlugin):
     _remove_sql: str = 'delete from Alerts where Phrase = ?'
     _list_sql: str = 'select * from Alerts'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         # Get own database connection.
         self._db = DB()

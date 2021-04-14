@@ -114,7 +114,7 @@ class Group(CommandPlugin):
     _unclaim_msg_for_all_sql: str = 'delete from GroupClaimsAll where MessageId = ?'
     _unsubscribe_user_sql: str = 'delete from GroupUsers where UserId = ? and GroupId = ?'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         # Get own database connection.
         self._db = DB()
@@ -169,7 +169,7 @@ class Group(CommandPlugin):
     ) -> Union[Response, Iterable[Response]]:
         if event['type'] == 'reaction':
             return self.handle_reaction_event(event)
-        elif event['type'] == 'stream':
+        if event['type'] == 'stream':
             return self.handle_stream_event(event)
         return self.handle_message(event['message'])
 
@@ -188,7 +188,7 @@ class Group(CommandPlugin):
 
         if command == 'subscribe':
             return self._subscribe(message['sender_id'], args.group_id, message)
-        elif command == 'unsubscribe':
+        if command == 'unsubscribe':
             return self._unsubscribe(message['sender_id'], args.group_id, message)
 
         if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
@@ -196,23 +196,23 @@ class Group(CommandPlugin):
 
         if command == 'list':
             return self._list(message)
-        elif command == 'announce':
+        if command == 'announce':
             if message['type'] != 'stream':
                 return Response.build_message(message, 'Claim only stream messages.')
             return self._announce(message)
-        elif command == 'unannounce':
+        if command == 'unannounce':
             return self._unannounce(message, args.message_id)
-        elif command == 'claim':
+        if command == 'claim':
             if message['type'] != 'stream':
                 return Response.build_message(message, 'Claim only stream messages.')
             return self._claim(message, args.group_id)
-        elif command == 'unclaim':
+        if command == 'unclaim':
             return self._unclaim(message, args.group_id, args.message_id)
-        elif command == 'add':
+        if command == 'add':
             return self._add(message, args.group_id, args.emoji)
-        elif command == 'remove':
+        if command == 'remove':
             return self._remove(message, args.group_id)
-        elif command in ['add_streams', 'remove_streams']:
+        if command in ['add_streams', 'remove_streams']:
             return self._change_streams(message, args.group_id, command, args.streams)
 
         return Response.command_not_found(message)
@@ -229,7 +229,7 @@ class Group(CommandPlugin):
             return Response.none()
         if event['op'] == 'add':
             return self._subscribe(event['user_id'], group_id)
-        elif event['op'] == 'remove':
+        if event['op'] == 'remove':
             return self._unsubscribe(event['user_id'], group_id)
 
         return Response.none()
@@ -540,13 +540,12 @@ class Group(CommandPlugin):
 
         self._db.execute(self._remove_sql, group_id, commit = True)
 
-
         if msg_success:
             return Response.ok(message)
-        else:
-            return Response.build_message(
-                message, 'Group removed, but removal failed for some announcement messages.'
-            )
+
+        return Response.build_message(
+            message, 'Group removed, but removal failed for some announcement messages.'
+        )
 
     def _subscribe(
         self,

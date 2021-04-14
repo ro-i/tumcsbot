@@ -112,17 +112,12 @@ class Regex:
         the given string (fullmatch) and extract the capture group with
         the given id.
         """
-        match: Optional[Match[str]] = None
-
         for (pattern, group_id) in patterns:
-            match = pattern.fullmatch(string)
+            match: Optional[Match[str]] = pattern.fullmatch(string)
             if match is not None:
-                break
+                return cls.get_captured_string_from_match(match, group_id)
 
-        if match is None:
-            return None
-
-        return cls.get_captured_string_from_match(match, group_id)
+        return None
 
     @classmethod
     def get_emoji_name(cls, string: str) -> Optional[str]:

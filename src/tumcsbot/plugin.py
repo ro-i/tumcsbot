@@ -48,11 +48,22 @@ class PluginContext:
         client: Client,
         zuliprc: str,
         command_plugin_classes: List[Type['CommandPlugin']],
-        **kwargs: Any
     ) -> None:
-        self.client: Client = client
-        self.zuliprc: str = zuliprc
-        self.command_plugin_classes: List[Type['CommandPlugin']] = command_plugin_classes
+        self._client: Client = client
+        self._zuliprc: str = zuliprc
+        self._command_plugin_classes: List[Type['CommandPlugin']] = command_plugin_classes
+
+    @property
+    def client(self) -> Client:
+        return self._client
+
+    @property
+    def command_plugin_classes(self) -> List[Type['CommandPlugin']]:
+        return self._command_plugin_classes
+
+    @property
+    def zuliprc(self) -> str:
+        return self._zuliprc
 
 
 class Plugin(ABC):
@@ -64,7 +75,7 @@ class Plugin(ABC):
     # See https://zulip.com/api/get-events.
     events: List[str] = []
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         # Get own client reference by default.
         self.client: Client = plugin_context.client
 
@@ -183,8 +194,11 @@ class SubBotPlugin(multiprocessing.Process, Plugin):
 
     def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
         # A separate process needs an own client.
-        plugin_context.client = Client(config_file = plugin_context.zuliprc)
-        Plugin.__init__(self, plugin_context)
+        Plugin.__init__(self, PluginContext(
+            Client(config_file = plugin_context.zuliprc),
+            plugin_context.zuliprc,
+            plugin_context.command_plugin_classes
+        ))
         # The 'daemon'-Argument ensures that subprocesses get
         # terminated when the parent process terminates.
         multiprocessing.Process.__init__(

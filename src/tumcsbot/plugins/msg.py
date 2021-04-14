@@ -33,7 +33,7 @@ class Msg(CommandPlugin):
     _search_sql: str = 'select MsgText from Messages where MsgId = ?'
     _update_sql: str = 'replace into Messages values (?,?)'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         # Get own database connection.
         self._db = DB()
@@ -80,10 +80,12 @@ class Msg(CommandPlugin):
             # Remove requesting message.
             self.client.delete_message(message['id'])
             return Response.build_message(message, result_sql[0][0])
-        elif command == 'add':
+
+        if command == 'add':
             self._db.execute(self._update_sql, ident, args.text, commit = True)
             return Response.ok(message)
-        elif command == 'remove':
+
+        if command == 'remove':
             self._db.execute(self._delete_sql, ident, commit = True)
             return Response.ok(message)
 

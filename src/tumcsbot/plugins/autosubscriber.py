@@ -29,7 +29,7 @@ class AutoSubscriber(Plugin):
     _subscribe_sql: str = 'update PublicStreams set Subscribed = 1 where StreamName = ?'
     _remove_sql: str = 'delete from PublicStreams where StreamName = ?'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         self._db = DB()
         self._db.checkout_table(

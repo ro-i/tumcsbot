@@ -31,7 +31,7 @@ class Conf(CommandPlugin):
     _remove_sql: str = 'delete from Conf where Key = ?'
     _update_sql: str = 'replace into Conf values (?,?)'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         self._db = DB()
         self._db.checkout_table('Conf', '(Key text primary key, Value text not null)')
@@ -60,10 +60,12 @@ class Conf(CommandPlugin):
             for key, value in self._db.execute(self._list_sql):
                 response += f'\n{key} | {value}'
             return Response.build_message(message, response)
-        elif command == 'remove':
+
+        if command == 'remove':
             self._db.execute(self._remove_sql, args.key, commit = True)
             return Response.ok(message)
-        elif command == 'set':
+
+        if command == 'set':
             try:
                 self._db.execute(self._update_sql, args.key, args.value, commit = True)
             except Exception as e:

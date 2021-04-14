@@ -38,7 +38,7 @@ class Help(CommandPlugin):
         """
     )
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         self.help_info: List[Tuple[str, str, str]] = self._get_help_info(
             plugin_context.command_plugin_classes
@@ -54,7 +54,8 @@ class Help(CommandPlugin):
             return self._help_overview(message)
         return self._help_command(message, command)
 
-    def _format_description(self, description: str) -> str:
+    @staticmethod
+    def _format_description(description: str) -> str:
         """Format the usage description of a command."""
         # Replace multiple whitespaces by a single one.
         for space in '\n \t':
@@ -63,7 +64,8 @@ class Help(CommandPlugin):
         description.strip()
         return description
 
-    def _format_syntax(self, syntax: str) -> str:
+    @staticmethod
+    def _format_syntax(syntax: str) -> str:
         """Format the syntax string of a command."""
         return '```text\n' + syntax.strip() + '\n```\n'
 

@@ -86,7 +86,6 @@ class TumCSBot:
         max_workers: int = 8,
         debug: bool = False,
         logfile: Optional[str] = None,
-        **kwargs: str
     ) -> None:
         self.executor: concurrent.futures.ThreadPoolExecutor
         self.restart: bool = False

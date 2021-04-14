@@ -27,7 +27,7 @@ class Source(CommandPlugin):
     )
     _list_sql: str = 'select * from sqlite_master where type = "table"'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         # Get own read-only (!!!) database connection.
         self._db = DB(read_only = True)

@@ -16,7 +16,7 @@ import re
 import time
 
 from collections.abc import Iterable
-from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Union
+from typing import cast, Any, Callable, Dict, IO, List, Pattern, Optional, Union
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
@@ -234,7 +234,7 @@ class Client(ZulipClient):
 
         if response.message_type == MessageType.MESSAGE:
             return self.send_message(response.response)
-        elif response.message_type == MessageType.EMOJI:
+        if response.message_type == MessageType.EMOJI:
             return self.add_reaction(response.response)
         return {}
 

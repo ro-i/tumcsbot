@@ -14,7 +14,7 @@ class UnknownCommand(Plugin):
     plugin_name = 'unknown_command'
     events = ['message']
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         self._command_names: List[str] = list(map(
             lambda p: p.plugin_name,

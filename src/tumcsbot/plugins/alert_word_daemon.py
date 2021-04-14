@@ -22,7 +22,7 @@ class AlertWordDaemon(SubBotPlugin):
     events = ['message']
     _select_sql: str = 'select Phrase, Emoji from Alerts'
 
-    def __init__(self, plugin_context: PluginContext, **kwargs: Any) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         super().__init__(plugin_context)
         # Get pattern and the alert_phrase - emoji bindings.
         self._bindings: List[Tuple[Pattern[str], str]] = self._get_bindings()
