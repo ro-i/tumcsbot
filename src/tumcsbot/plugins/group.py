@@ -442,7 +442,10 @@ class Group(CommandPlugin):
             msg: Dict[str, Any] = result['messages'][0]
             for func in funcs:
                 func(msg)
-            self.client.update_message({'message_id': msg_id, 'content': msg['content']})
+            result = self.client.update_message({'message_id': msg_id, 'content': msg['content']})
+            if result['result'] != 'success':
+                logging.warning('could not edit message %d: %s', msg_id, str(result))
+                success = False
 
         return success
 
