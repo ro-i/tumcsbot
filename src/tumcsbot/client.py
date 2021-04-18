@@ -15,8 +15,8 @@ import logging
 import re
 import time
 
-from collections.abc import Iterable
-from typing import cast, Any, Callable, Dict, IO, List, Pattern, Optional, Union
+from collections.abc import Iterable as IterableClass
+from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Union
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
@@ -251,7 +251,7 @@ class Client(ZulipClient):
             logging.debug('responses is None, this should never happen')
             return
 
-        if not isinstance(responses, Iterable):
+        if not isinstance(responses, IterableClass):
             self.send_response(responses)
             return
 
