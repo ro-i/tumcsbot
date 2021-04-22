@@ -305,6 +305,9 @@ class Client(ZulipClient):
 
         Return true on success or false otherwise.
         """
+        if self.private_stream_exists(stream_name):
+            return False
+
         subscription: Dict[str, str] = {'name': stream_name}
         if description is not None:
             subscription.update(description = description)

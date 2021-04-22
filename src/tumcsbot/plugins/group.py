@@ -11,13 +11,13 @@ from typing import cast, Any, Callable, Dict, Iterable, List, Optional, Pattern,
     Tuple, Union
 from sqlite3 import IntegrityError
 
-from tumcsbot.lib import CommandParser, DB, Regex, Response
+from tumcsbot.lib import stream_name_match, CommandParser, DB, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
 class Group(CommandPlugin):
     plugin_name = 'group'
-    events = ['message', 'reaction']
+    events = ['message', 'reaction', 'stream']
     syntax = cleandoc(
         """
         group (un)subscribe <group_id>
@@ -486,7 +486,7 @@ class Group(CommandPlugin):
         for group_id, _, stream_regs_str in self._db.execute(self._list_sql):
             stream_regs: List[str] = stream_regs_str.split('\n')
             for stream_reg in stream_regs:
-                if not re.fullmatch(stream_reg, stream_name):
+                if not stream_name_match(stream_reg, stream_name):
                     continue
                 result.append(group_id)
                 break

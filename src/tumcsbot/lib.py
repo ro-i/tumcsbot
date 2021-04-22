@@ -627,3 +627,11 @@ def stream_names_equal(stream_name1: str, stream_name2: str) -> bool:
     Currently, Zulip considers stream names to be case insensitive.
     """
     return stream_name1.casefold() == stream_name2.casefold()
+
+
+def stream_name_match(stream_reg: str, stream_name: str) -> bool:
+    """Decide whether a stream regex matches a stream_name (fullmatch).
+
+    Currently, Zulip considers stream names to be case insensitive.
+    """
+    return re.fullmatch(stream_reg, stream_name, flags = re.I)
