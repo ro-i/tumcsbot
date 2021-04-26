@@ -3,8 +3,6 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import re
-
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 
@@ -57,9 +55,6 @@ class Help(CommandPlugin):
     @staticmethod
     def _format_description(description: str) -> str:
         """Format the usage description of a command."""
-        # Replace multiple whitespaces by a single one.
-        for space in '\n \t':
-            description = re.sub(space + r'{2,}', space, description)
         # Remove surrounding whitespace.
         description.strip()
         return description
