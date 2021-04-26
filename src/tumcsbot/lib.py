@@ -634,4 +634,4 @@ def stream_name_match(stream_reg: str, stream_name: str) -> bool:
 
     Currently, Zulip considers stream names to be case insensitive.
     """
-    return re.fullmatch(stream_reg, stream_name, flags = re.I)
+    return re.fullmatch(stream_reg, stream_name, flags = re.I) is not None
