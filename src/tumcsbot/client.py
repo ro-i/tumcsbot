@@ -47,8 +47,6 @@ class Client(ZulipClient):
                               stream.
     """
 
-    # TODO: client_gravater etc. for better performance?
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Override the constructor of the parent class."""
         super().__init__(*args, **kwargs)
@@ -178,6 +176,38 @@ class Client(ZulipClient):
                 return cast(str, stream['name'])
 
         return None
+
+    def get_user_ids_from_display_names(
+        self,
+        display_names: Iterable[str]
+    ) -> Optional[List[int]]:
+        """Get the user id from a user display name.
+
+        Since there may be multiple users with the same display name,
+        the returned list of user ids may be longer than the given list
+        of user display names.
+        Return None on error.
+        """
+        result: Dict[str, Any] = self.get_users()
+        if result['result'] != 'success':
+            return None
+
+        user_ids: List[int] = []
+
+        for display_name in display_names:
+            user_ids.extend(
+                user['user_id'] for user in result['members']
+                if user['full_name'] == display_name
+            )
+
+        return user_ids
+
+    def get_users(self, request: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Override method from parent class."""
+        # Try to minimize the network traffic.
+        if request is not None:
+            request.update(client_gravatar = True, include_custom_profile_fields = False)
+        return super().get_users(request)
 
     def is_only_pm_recipient(self, message: Dict[str, Any]) -> bool:
         """Check whether the bot is the only recipient of the given pm.
