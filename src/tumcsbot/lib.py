@@ -29,7 +29,7 @@ from enum import Enum
 from inspect import cleandoc
 from itertools import repeat
 from os.path import isabs
-from typing import Any, Callable, Dict, Final, List, Match, Optional, Pattern, Tuple, Union
+from typing import cast, Any, Callable, Dict, Final, List, Match, Optional, Pattern, Tuple, Union
 
 
 LOGGING_FORMAT: str = (
@@ -75,11 +75,23 @@ class Regex:
         r'#{0}({1}){0}'.format(_ASTERISKS.pattern, _STREAM.pattern)
     )
     _USER: Final[Pattern[str]] = re.compile(r'[^\*\`\\\>\"\@]+')
+    _USER_AUTOCOMPLETED_TEMPLATE: str = r'{0}({1}){0}'.format(
+        _ASTERISKS.pattern, _USER.pattern
+    )
+    _USER_AUTOCOMPLETED_ID_TEMPLATE: str = r'{0}({1})\|(\d+){0}'.format(
+        _ASTERISKS.pattern, _USER.pattern
+    )
     _USER_LINKED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@_{0}({1}){0}'.format(_ASTERISKS.pattern, _USER.pattern)
+        r'@_' + _USER_AUTOCOMPLETED_TEMPLATE
     )
     _USER_MENTIONED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@{0}({1}){0}'.format(_ASTERISKS.pattern, _USER.pattern)
+        r'@' + _USER_AUTOCOMPLETED_TEMPLATE
+    )
+    _USER_LINKED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'@_' + _USER_AUTOCOMPLETED_ID_TEMPLATE
+    )
+    _USER_MENTIONED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'@' + _USER_AUTOCOMPLETED_ID_TEMPLATE
     )
 
     @staticmethod
@@ -101,21 +113,27 @@ class Regex:
             return None
 
     @classmethod
-    def get_captured_string_from_pattern_or(
+    def get_captured_strings_from_pattern_or(
         cls,
-        patterns: List[Tuple[Pattern[str], int]],
+        patterns: List[Tuple[Pattern[str], List[int]]],
         string: str
-    ) -> Optional[str]:
+    ) -> Optional[List[str]]:
         """Extract a substring from a string.
 
         Walk through the provided patterns, find the first that matchs
-        the given string (fullmatch) and extract the capture group with
-        the given id.
+        the given string (fullmatch) and extract the capture groups with
+        the given ids.
+        Return None if there has been no matching pattern.
         """
-        for (pattern, group_id) in patterns:
+        for (pattern, group_ids) in patterns:
             match: Optional[Match[str]] = pattern.fullmatch(string)
-            if match is not None:
-                return cls.get_captured_string_from_match(match, group_id)
+            if match is None:
+                continue
+            result: List[Optional[str]] = [
+                cls.get_captured_string_from_match(match, group_id)
+                for group_id in group_ids
+            ]
+            return None if None in result else cast(List[str], result)
 
         return None
 
@@ -130,9 +148,10 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        return cls.get_captured_string_from_pattern_or(
-            [(cls._EMOJI_AUTOCOMPLETED_CAPTURE, 1), (cls._EMOJI, 0)], string.strip()
+        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+            [(cls._EMOJI_AUTOCOMPLETED_CAPTURE, [1]), (cls._EMOJI, [0])], string.strip()
         )
+        return None if not result else result[0]
 
     @classmethod
     def get_stream_name(cls, string: str) -> Optional[str]:
@@ -145,25 +164,48 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        return cls.get_captured_string_from_pattern_or(
-            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, 1), (cls._STREAM, 0)], string.strip()
+        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])], string.strip()
         )
+        return None if not result else result[0]
 
     @classmethod
-    def get_user_name(cls, string: str) -> Optional[str]:
+    def get_user_name(
+        cls,
+        string: str,
+        get_user_id: bool = False
+    ) -> Optional[Union[str, Tuple[str, Optional[int]]]]:
         """Extract the user name from a string.
 
         Match the whole string.
-        There are three cases handled here:
+        There are five cases handled here:
            abc -> abc, @**abc** -> abc, @_**abc** -> abc
+        and
+           @**abc|1234** -> abc, @_**abc|1234** -> abc
+           or - if get_user_id is True -
+           @**abc|1234** -> (abc, 1234), @_**abc|1234** -> (abc, 1234)
 
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        return cls.get_captured_string_from_pattern_or(
-            [(cls._USER_MENTIONED_CAPTURE, 1), (cls._USER_LINKED_CAPTURE, 1), (cls._USER, 0)],
+        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+            [
+                (cls._USER_MENTIONED_ID_CAPTURE, [1, 2]),
+                (cls._USER_LINKED_ID_CAPTURE, [1, 2]),
+                (cls._USER_MENTIONED_CAPTURE, [1]),
+                (cls._USER_LINKED_CAPTURE, [1]),
+                (cls._USER, [0])
+            ],
             string.strip()
         )
+        if not result:
+            return None
+        if not get_user_id:
+            return result[0]
+        if len(result) == 1:
+            # We wanted the user ID, but did not find it.
+            return (result[0], None)
+        return (result[0], int(result[1]))
 
 
 class CommandParser:

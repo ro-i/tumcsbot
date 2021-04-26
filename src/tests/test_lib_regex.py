@@ -25,6 +25,10 @@ class RegexTest(unittest.TestCase):
         ('@_*John*', None), ('@John**', None), ('@_John**', None), ('@**John', None),
         ('@_**John', None), ('Jo\\hn', None), ('@**J\\n**', None), ('@_**John D"e**', None)
     ]
+    user_names_ids: List[Tuple[str, Optional[Tuple[str, int]]]] = [
+        ('@_**John Doe|123**', ('John Doe', 123)), ('@**John Doe|456**', ('John Doe', 456)),
+        ('@John Doe|123**', None), ('@**John Doe|123', None)
+    ]
 
     def test_emoji_names(self) -> None:
         for (string, emoji) in self.emoji_names:
@@ -37,3 +41,7 @@ class RegexTest(unittest.TestCase):
     def test_user_names(self) -> None:
         for (string, user_name) in self.user_names:
             self.assertEqual(Regex.get_user_name(string), user_name)
+
+    def test_user_names_ids(self) -> None:
+        for (string, user_name) in self.user_names_ids:
+            self.assertEqual(Regex.get_user_name(string, get_user_id = True), user_name)
