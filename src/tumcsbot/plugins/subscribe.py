@@ -14,6 +14,7 @@ class Subscribe(CommandPlugin):
     plugin_name = 'subscribe'
     syntax = cleandoc(
         """
+        [beta]
         subscribe streams <destination_stream_name> <stream_names>...
           or subscribe users <destination_stream_name> <user_names>...
         """
@@ -72,15 +73,15 @@ class Subscribe(CommandPlugin):
     ) -> Union[Response, Iterable[Response]]:
         result: Optional[Tuple[str, CommandParser.Args]]
 
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
-            return Response.admin_err(message)
-
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
         command, args = result
 
         if command == 'streams':
+            if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+                return Response.admin_err(message)
+
             for stream in args.streams:
                 if not self.client.subscribe_all_from_stream_to_stream(
                         stream, args.dest_stream, None):
