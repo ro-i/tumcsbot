@@ -31,6 +31,7 @@ class Subscribe(CommandPlugin):
         destination stream.
         - `all_users`
         Subscribe all users to the destination stream.
+        [administrator rights needed]
 
         If the destination stream does not exist yet, it will be \
         automatically created (with an empty description).
