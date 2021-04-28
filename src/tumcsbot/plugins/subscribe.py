@@ -17,6 +17,7 @@ class Subscribe(CommandPlugin):
         [beta]
         subscribe streams <destination_stream_name> <stream_names>...
           or subscribe users <destination_stream_name> <user_names>...
+          or subscribe all_users <destination_stream_name>
         """
     )
     description = cleandoc(
@@ -26,7 +27,10 @@ class Subscribe(CommandPlugin):
         destination stream.
         [administrator rights needed]
         - `users`
-        Subscribe all given user names to the description stream.
+        Subscribe all users with the specified names to the \
+        destination stream.
+        - `all_users`
+        Subscribe all users to the destination stream.
 
         If the destination stream does not exist yet, it will be \
         automatically created (with an empty description).
@@ -65,6 +69,7 @@ class Subscribe(CommandPlugin):
             },
             greedy = True
         )
+        self.command_parser.add_subcommand('all_users', {'dest_stream': Regex.get_stream_name})
 
     def handle_message(
         self,
@@ -79,25 +84,71 @@ class Subscribe(CommandPlugin):
         command, args = result
 
         if command == 'streams':
-            if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
-                return Response.admin_err(message)
+            return self.subscribe_streams(message, args.dest_stream, args.streams)
+        if command == 'users':
+            return self.subscribe_users(message, args.dest_stream, args.users)
+        if command == 'all_users':
+            return self.subscribe_all_users(message, args.dest_stream)
 
-            for stream in args.streams:
-                if not self.client.subscribe_all_from_stream_to_stream(
-                        stream, args.dest_stream, None):
-                    return Response.error(message)
-        elif command == 'users':
-            user_ids: Optional[List[int]] = self.client.get_user_ids_from_display_names(
-                filter(lambda o: isinstance(o, str), args.users)
-            )
-            if user_ids is None:
-                return Response.build_message(message, 'error: could not get the user ids.')
+        return Response.command_not_found(message)
 
-            user_ids.extend(map(
-                lambda t: cast(int, t[1]), filter(lambda o: isinstance(o, tuple), args.users)
-            ))
+    def subscribe_all_users(
+        self,
+        message: Dict[str, Any],
+        dest_stream: str,
+    ) -> Union[Response, Iterable[Response]]:
+        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+            return Response.admin_err(message)
 
-            if not self.client.subscribe_users(user_ids, args.dest_stream):
-                return Response.error(message)
+        result: Dict[str, Any] = self.client.get_users()
+        if result['result'] != 'success':
+            return Response.error(message)
+        user_ids: List[int] = [ user['user_id'] for user in result['members'] ]
+
+        if not self.client.subscribe_users(user_ids, dest_stream):
+            return Response.error(message)
+
+        return Response.ok(message)
+
+    def subscribe_streams(
+        self,
+        message: Dict[str, Any],
+        dest_stream: str,
+        streams: List[str]
+    ) -> Union[Response, Iterable[Response]]:
+        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+            return Response.admin_err(message)
+
+        failed: List[str] = []
+
+        for stream in streams:
+            if not self.client.subscribe_all_from_stream_to_stream(stream, dest_stream, None):
+                failed.append(stream)
+
+        if not failed:
+            return Response.ok(message)
+
+        return Response.build_message(
+            message, 'Failed to subscribe the following streams:\n' + '\n'.join(failed)
+        )
+
+    def subscribe_users(
+        self,
+        message: Dict[str, Any],
+        dest_stream: str,
+        users: List[str]
+    ) -> Union[Response, Iterable[Response]]:
+        user_ids: Optional[List[int]] = self.client.get_user_ids_from_display_names(
+            filter(lambda o: isinstance(o, str), users)
+        )
+        if user_ids is None:
+            return Response.build_message(message, 'error: could not get the user ids.')
+
+        user_ids.extend(map(
+            lambda t: cast(int, t[1]), filter(lambda o: isinstance(o, tuple), users)
+        ))
+
+        if not self.client.subscribe_users(user_ids, dest_stream):
+            return Response.error(message)
 
         return Response.ok(message)

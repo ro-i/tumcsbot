@@ -335,6 +335,8 @@ class Client(ZulipClient):
 
         Return true on success or false otherwise.
         """
+        chunk_size: int = 100
+
         if self.private_stream_exists(stream_name):
             return False
 
@@ -342,15 +344,15 @@ class Client(ZulipClient):
         if description is not None:
             subscription.update(description = description)
 
-        # Use chunks of 500 users. TODO: non-existant users
-        for i in range(0, len(user_ids), 500):
+        # Use chunks of 100 users. TODO: non-existant users
+        for i in range(0, len(user_ids), chunk_size):
             result: Dict[str, Any] = self.add_subscriptions(
                 streams = [subscription],
-                principals = user_ids[i:i + 500]
+                principals = user_ids[i:i + chunk_size]
                 # (a too large index will be automatically reduced to len())
             )
             if result['result'] != 'success':
-                return False
+                logging.warning(str(result))
 
         return True
 
