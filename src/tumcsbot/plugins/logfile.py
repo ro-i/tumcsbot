@@ -7,21 +7,21 @@ import logging
 
 from typing import Any, Dict, Iterable, List, Union
 
-from tumcsbot.lib import Response
+from tumcsbot.lib import user_is_privileged, Response
 from tumcsbot.plugin import CommandPlugin
 
 
 class Logfile(CommandPlugin):
     plugin_name = 'logfile'
     syntax = 'logfile'
-    description = 'Get the bot\'s own logfile.\n[administrator rights needed]'
+    description = 'Get the bot\'s own logfile.\n[administrator/moderator rights needed]'
 
     def handle_message(
         self,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         handlers: List[logging.Handler] = logging.getLogger().handlers

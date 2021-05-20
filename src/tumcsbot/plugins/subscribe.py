@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import cast, Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from tumcsbot.lib import CommandParser, Regex, Response
+from tumcsbot.lib import user_is_privileged, CommandParser, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -25,13 +25,13 @@ class Subscribe(CommandPlugin):
         - `streams`
         Subscribe all subscribers of the given streams to the \
         destination stream.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         - `users`
         Subscribe all users with the specified names to the \
         destination stream.
         - `all_users`
         Subscribe all users to the destination stream.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
 
         If the destination stream does not exist yet, it will be \
         automatically created (with an empty description).
@@ -98,7 +98,7 @@ class Subscribe(CommandPlugin):
         message: Dict[str, Any],
         dest_stream: str,
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         result: Dict[str, Any] = self.client.get_users()
@@ -117,7 +117,7 @@ class Subscribe(CommandPlugin):
         dest_stream: str,
         streams: List[str]
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         failed: List[str] = []

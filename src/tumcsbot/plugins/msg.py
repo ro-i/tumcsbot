@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import user_is_privileged, CommandParser, DB, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -25,7 +25,7 @@ class Msg(CommandPlugin):
         or list all stored messages. The text must be quoted but may
         contain line breaks.
         The identifiers are handled case insensitively.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         """
     )
     _delete_sql: str = 'delete from Messages where MsgId = ?'
@@ -55,7 +55,7 @@ class Msg(CommandPlugin):
         result: Optional[Tuple[str, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         # Get command and parameters.

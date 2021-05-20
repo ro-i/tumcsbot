@@ -11,7 +11,7 @@ from inspect import cleandoc
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union
 
-from tumcsbot.lib import Response
+from tumcsbot.lib import user_is_privileged, Response
 from tumcsbot.plugin import CommandPlugin
 
 
@@ -21,7 +21,7 @@ class Update(CommandPlugin):
     description = cleandoc(
         """
         Update the bot. You may want to restart it afterwards.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         """
     )
     _git_pull_cmd: List[str] = ['git', 'pull']
@@ -32,7 +32,7 @@ class Update(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         # Get the dirname of this file (which is located in the git repo).

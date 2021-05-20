@@ -13,7 +13,7 @@ change the alert words and specify the emojis to use for the reactions.
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from tumcsbot.lib import CommandParser, DB, Regex, Response
+from tumcsbot.lib import user_is_privileged, CommandParser, DB, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -35,7 +35,7 @@ class AlertWord(CommandPlugin):
         bot.
         Note that an alert phrase may be any regular expression.
         Hint: `\\b` represents word boundaries.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         """
     )
     _update_sql: str = 'replace into Alerts values (?,?)'
@@ -65,7 +65,7 @@ class AlertWord(CommandPlugin):
         result: Optional[Tuple[str, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         # Get command and parameters.

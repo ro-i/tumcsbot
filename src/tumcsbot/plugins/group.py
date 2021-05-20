@@ -11,7 +11,7 @@ from typing import cast, Any, Callable, Dict, Iterable, List, Optional, Pattern,
     Tuple, Union
 from sqlite3 import IntegrityError
 
-from tumcsbot.lib import stream_name_match, CommandParser, DB, Regex, Response
+from tumcsbot.lib import stream_name_match, user_is_privileged, CommandParser, DB, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -60,7 +60,7 @@ class Group(CommandPlugin):
         which will be "special" for all groups and in which the bot \
         will maintain a list of all groups.
 
-        [administrator rights needed except for (un)subscribe]
+        [administrator/moderator rights needed except for (un)subscribe]
         """
     )
     _announcement_msg: str = cleandoc(
@@ -191,7 +191,7 @@ class Group(CommandPlugin):
         if command == 'unsubscribe':
             return self._unsubscribe(message['sender_id'], args.group_id, message)
 
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         if command == 'list':

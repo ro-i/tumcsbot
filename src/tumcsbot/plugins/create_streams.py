@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Union
 
-from tumcsbot.lib import Response, split
+from tumcsbot.lib import split, user_is_privileged, Response
 from tumcsbot.plugin import CommandPlugin
 
 
@@ -18,7 +18,7 @@ class CreateStreams(CommandPlugin):
         Create a public stream for every (stream,description)-tuple \
         passed to this command. You may provide a quoted empty string
         as description.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         """
         )
 
@@ -27,7 +27,7 @@ class CreateStreams(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         failed: List[str] = []

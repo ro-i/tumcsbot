@@ -8,7 +8,7 @@ import logging
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import user_is_privileged, CommandParser, DB, Response
 from tumcsbot.plugin import CommandPlugin, PluginContext
 
 
@@ -24,7 +24,7 @@ class Conf(CommandPlugin):
     description = cleandoc(
         """
         Set/get/remove bot configuration variables.
-        [administrator rights needed]
+        [administrator/moderator rights needed]
         """
     )
     _list_sql: str = 'select * from Conf'
@@ -47,7 +47,7 @@ class Conf(CommandPlugin):
     ) -> Union[Response, Iterable[Response]]:
         result: Optional[Tuple[str, CommandParser.Args]]
 
-        if not self.client.get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
             return Response.admin_err(message)
 
         result = self.command_parser.parse(message['command'])
