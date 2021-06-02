@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import cast, Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from tumcsbot.lib import user_is_privileged, CommandParser, Regex, Response
+from tumcsbot.lib import CommandParser, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -98,7 +98,7 @@ class Subscribe(CommandPlugin):
         message: Dict[str, Any],
         dest_stream: str,
     ) -> Union[Response, Iterable[Response]]:
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         result: Dict[str, Any] = self.client.get_users()
@@ -117,7 +117,7 @@ class Subscribe(CommandPlugin):
         dest_stream: str,
         streams: List[str]
     ) -> Union[Response, Iterable[Response]]:
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         failed: List[str] = []

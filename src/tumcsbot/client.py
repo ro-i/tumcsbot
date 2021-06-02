@@ -406,3 +406,31 @@ class Client(ZulipClient):
 #            logging.warning('cannot subscribe %s to stream: %s', user_id, str(result))
 #
 #        return success
+
+    def user_is_privileged(self, user_id: int) -> bool:
+        """Check whether a user is allowed to perform privileged commands.
+
+        Some commands of this bot are only allowed to be performed by
+        privileged users. Which user roles are considered to be privileged
+        in the context of this bot:
+            - prior to Zulip 4.0:
+                Organization owner, Organization administrator
+            - since Zulip 4.0:
+                Organization owner, Organization administrator,
+                Organization moderator
+
+        Arguments:
+        ----------
+            user_id    The user_id to examine.
+        """
+        result: Dict[str, Any] = self.get_user_by_id(user_id)
+        if result['result'] != 'success':
+            return False
+        user: Dict[str, Any] = result['user']
+
+        if 'role' in user and isinstance(user['role'], int) and user['role'] in [100, 200, 300]:
+            return True
+        if 'is_admin' in user and isinstance(user['is_admin'], bool):
+            return user['is_admin']
+
+        return False

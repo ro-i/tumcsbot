@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from tumcsbot.lib import user_is_privileged, CommandParser, DB, Response
+from tumcsbot.lib import CommandParser, DB, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -55,7 +55,7 @@ class Msg(CommandPlugin):
         result: Optional[Tuple[str, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         # Get command and parameters.

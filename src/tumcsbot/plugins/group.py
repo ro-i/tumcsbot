@@ -11,7 +11,7 @@ from typing import cast, Any, Callable, Dict, Iterable, List, Optional, Pattern,
     Tuple, Union
 from sqlite3 import IntegrityError
 
-from tumcsbot.lib import stream_name_match, user_is_privileged, CommandParser, DB, Regex, Response
+from tumcsbot.lib import stream_name_match, CommandParser, DB, Regex, Response
 from tumcsbot.plugin import PluginContext, CommandPlugin
 
 
@@ -191,7 +191,7 @@ class Group(CommandPlugin):
         if command == 'unsubscribe':
             return self._unsubscribe(message['sender_id'], args.group_id, message)
 
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         if command == 'list':

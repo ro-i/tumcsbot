@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
-from tumcsbot.lib import user_is_privileged, DB, Response
+from tumcsbot.lib import DB, Response
 from tumcsbot.plugin import CommandPlugin, PluginContext
 
 
@@ -39,7 +39,7 @@ class Source(CommandPlugin):
     ) -> Union[Response, Iterable[Response]]:
         result_sql: List[Tuple[Any, ...]]
 
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         try:

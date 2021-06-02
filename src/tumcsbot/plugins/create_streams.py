@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Union
 
-from tumcsbot.lib import split, user_is_privileged, Response
+from tumcsbot.lib import split, Response
 from tumcsbot.plugin import CommandPlugin
 
 
@@ -27,7 +27,7 @@ class CreateStreams(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        if not user_is_privileged(self.client.get_user_by_id(message['sender_id'])):
+        if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         failed: List[str] = []

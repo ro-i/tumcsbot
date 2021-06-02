@@ -677,29 +677,3 @@ def stream_name_match(stream_reg: str, stream_name: str) -> bool:
     Currently, Zulip considers stream names to be case insensitive.
     """
     return re.fullmatch(stream_reg, stream_name, flags = re.I) is not None
-
-
-def user_is_privileged(user: Dict[str, Any]) -> bool:
-    """Check whether a user is allowed to perform privileged commands.
-
-    Some commands of this bot are only allowed to be performed by
-    privileged users. Which user roles are considered to be privileged
-    in the context of this bot:
-        - prior to Zulip 4.0:
-            Organization owner, Organization administrator
-        - since Zulip 4.0:
-            Organization owner, Organization administrator,
-            Organization moderator
-
-    Arguments:
-    ----------
-        user    A user object as returned by
-                client.get_user_by_id(user_id).
-    """
-    if user is None:
-        return False
-    if 'role' in user and isinstance(user['role'], int) and user['role'] in [100, 200, 300]:
-        return True
-    if 'is_admin' in user and isinstance(user['is_admin'], bool):
-        return user['is_admin']
-    return False
