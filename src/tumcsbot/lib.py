@@ -209,19 +209,44 @@ class Regex:
 
 
 class CommandParser:
-    """A simple positional argument parser."""
+    """A simple shell-like command line parser.
+
+    This command line parser can operate in two modes:
+    1. Only parse positional arguments, no special treating for
+       arguments preceded by "-".
+    2. Additionally parse short options (preceded by "-").
+       - Options always precede positional arguments.
+       - Options can take an (optional) argument which has to directly
+         follow the option character (no space(s) in-between).
+       - Options cannot be grouped (such as in "ls -lah").
+       - The order of the options does not matter.
+       - Contrary to positional arguments (except the last one), options
+         are always optional.
+       - The preceding "-" can be escaped by two backslashes in order to
+         prevent the following token to be considered as option.
+    """
     class Args(Namespace):
+        pass
+
+    class Opts(Namespace):
+        pass
+
+    class IllegalCommandParserState(Exception):
         pass
 
     def __init__(self) -> None:
         self.commands: Dict[str, Tuple[
-            Dict[str, Callable[[str], Any]], bool, bool
+            Dict[str, Optional[Callable[[str], Any]]],
+            Dict[str, Callable[[str], Any]],
+            bool,
+            bool
         ]] = {}
 
     def add_subcommand(
         self,
         name: str,
-        args: Dict[str, Callable[[str], Any]] = {},
+        opts: Optional[Dict[str, Optional[Callable[[str], Any]]]] = None,
+        args: Optional[Dict[str, Callable[[str], Any]]] = None,
         greedy: bool = False,
         optional: bool = False
     ) -> bool:
@@ -229,11 +254,30 @@ class CommandParser:
 
         Arguments:
         ----------
-        name       The name of the subcommand.
+        name       The name of the subcommand to add.
+                   In case that a subcommand with the given name has
+                   already been added to this parser, the previous one
+                   will be overwritten.
+        opts       The options to be expected as dict mapping the
+                   option name to the function that should be used
+                   to parse the option argument string. The function
+                   may be None if the option should be considered as
+                   simple flag not accepting any argument. In this case,
+                   a boolean value is associated with this option in the
+                   return value of parse() which indicates whether the
+                   flag has been present or not.
+                   In case that the option should support an optional
+                   parameter, the function has to be able to accept an
+                   empty string as argument.
+                   (default: {})
         args       The arguments to be expected as dict mapping the
                    argument name to the function that should be used
                    to get the argument value from the command string.
                    (default: {})
+                   Note that the order matters! (Since 3.7, the
+                   insertion order of dict keys is preserved, see
+                   https://mail.python.org/pipermail/python-dev/
+                   2017-December/151283.html)
         greedy     The last argument should consume all remaining
                    tokens of the command string (if there are any).
                    Note that the return value for the last argument
@@ -242,17 +286,28 @@ class CommandParser:
         optional   The last argument is optional.
                    (default: False)
 
-        Note that the arguments will be passed in the order they
-        appear in the list.
+        If the given arguments would lead to a broken state of the
+        parser, an IllegalCommandParserState exception is thrown.
         """
+        my_opts: Dict[str, Optional[Callable[[str], Any]]] = {}
+        my_args: Dict[str, Callable[[str], Any]] = {}
         if not name:
-            return False
-        self.commands.update({name: (args, greedy, optional)})
+            raise self.IllegalCommandParserState()
+        if opts is not None:
+            my_opts = opts
+        if args is not None:
+            my_args = args
+        self.commands.update({name: (my_opts, my_args, greedy, optional)})
         return True
 
-    def parse(self, command: Optional[str]) -> Optional[Tuple[str, Args]]:
-        """Parse the given command string."""
-        result_args: Dict[str, Any] = {}
+    def parse(self, command: Optional[str]) -> Optional[Tuple[str, Opts, Args]]:
+        """Parse the given command string.
+
+        Return the parsed subcommand together with its options and
+        arguments.
+        """
+        result_args: Optional[Dict[str, Any]]
+        result_opts: Optional[Tuple[Dict[str, Any], List[str]]]
 
         if not command or not self.commands:
             return None
@@ -266,10 +321,35 @@ class CommandParser:
         subcommand: str = tokens[0]
         if subcommand not in self.commands:
             return None
-        token_len: int = len(tokens[1:])
 
-        args, greedy, optional = self.commands[subcommand]
+        opts, args, greedy, optional = self.commands[subcommand]
+
+        result_opts = self._parse_opts(opts, tokens[1:])
+        if result_opts is None:
+            return None
+        result_args = self._parse_args(args, result_opts[1], greedy, optional)
+        if result_args is None:
+            return None
+
+        return (subcommand, self.Opts(**result_opts[0]), self.Args(**result_args))
+
+    def _parse_args(
+        self,
+        args: Dict[str, Callable[[str], Any]],
+        tokens: List[str],
+        greedy: bool,
+        optional: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Parse postitional arguments from tokens.
+
+        Return the parsed arguments together with their converted value.
+        Return None on error.
+        """
+        result: Dict[str, Any] = {}
+
         args_len: int = len(args)
+        token_len: int = len(tokens)
+
         if ((args_len > token_len + (1 if optional else 0))
                 or (not greedy and args_len < token_len)):
             return None
@@ -278,9 +358,9 @@ class CommandParser:
         converter: Optional[Callable[[str], Any]] = None
 
         # Iterate over expected arguments in the correct order.
-        for token, (name, converter) in zip(tokens[1:], args.items()):
+        for token, (name, converter) in zip(tokens, args.items()):
             try:
-                result_args.update({name: converter(token)})
+                result[name] = converter(token)
             except:
                 return None
 
@@ -288,13 +368,75 @@ class CommandParser:
         # Check, however, if there is an optional argument that is not present.
         if greedy and not (optional and args_len > token_len) and name and converter:
             try:
-                rest_list: List[Any] = list(map(converter, tokens[args_len + 1:]))
-                rest_list.insert(0, result_args[name])
+                rest_list: List[Any] = [converter(t) for t in tokens[args_len:]]
+                rest_list.insert(0, result[name])
             except:
                 return None
-            result_args[name] = rest_list
+            result[name] = rest_list
 
-        return (subcommand, self.Args(**result_args))
+        # Fill the optional arg(s) not present with None as value.
+        # (At the moment, there is only a single optional arg.)
+        for arg in args:
+            if arg not in result:
+                result[arg] = None
+
+        return result
+
+    def _parse_opts(
+        self,
+        opts: Dict[str, Optional[Callable[[str], Any]]],
+        tokens: List[str]
+    ) -> Optional[Tuple[Dict[str, Any], List[str]]]:
+        """Parse options from tokens.
+
+        Return the parsed options together with their converted
+        arguments and the non-option tokens.
+        Return None on error.
+        """
+        result: Dict[str, Any] = {}
+        index: int = 0
+
+        opts_len: int = len(opts)
+        if not opts_len:
+            return ({}, tokens)
+
+        for index in range(len(tokens)):
+            token: str = tokens[index]
+            # Stop at the first non-option token.
+            if token[0] != '-':
+                break
+            opt: str = token[1]
+            if opt not in opts:
+                # Invalid option.
+                return None
+            try:
+                converter: Optional[Callable[[str], Any]] = opts[opt]
+                # "token[2:]" results in an empty string if there is no argument.
+                if converter is None and token[2:]:
+                    # Option does not accept any parameter.
+                    return None
+                if converter is not None:
+                    result[opt] = converter(token[2:])
+                else:
+                    result[opt] = True
+            except:
+                return None
+
+        # Skip last option if there have been only options.
+        if tokens and token[0] == '-':
+            index += 1
+
+        # Mark all non-existant flags as False and fill the values of
+        # all the other options which were not specified on the given
+        # command line with None.
+        for opt in opts:
+            if opt not in result:
+                result[opt] = False if opts[opt] is None else None
+
+        # Remove all backslash escapes for "-".
+        # Note that split() in self.parse() already converted the two
+        # backslashes to a single one!
+        return (result, [t[1:] if t[0:2] == r'\-' else t for t in tokens[index:]])
 
 
 class DB:

@@ -139,23 +139,23 @@ class Group(CommandPlugin):
 
         # Init command parsing.
         self.command_parser = CommandParser()
-        self.command_parser.add_subcommand('subscribe', {'group_id': str})
-        self.command_parser.add_subcommand('unsubscribe', {'group_id': str})
-        self.command_parser.add_subcommand('add', {'group_id': str, 'emoji': Regex.get_emoji_name})
-        self.command_parser.add_subcommand('remove', {'group_id': str})
+        self.command_parser.add_subcommand('subscribe', args={'group_id': str})
+        self.command_parser.add_subcommand('unsubscribe', args={'group_id': str})
+        self.command_parser.add_subcommand('add', args={'group_id': str, 'emoji': Regex.get_emoji_name})
+        self.command_parser.add_subcommand('remove', args={'group_id': str})
         self.command_parser.add_subcommand(
-            'add_streams', {'group_id': str, 'streams': str}, greedy = True
+            'add_streams', args={'group_id': str, 'streams': str}, greedy = True
         )
         self.command_parser.add_subcommand(
-            'remove_streams', {'group_id': str, 'streams': str}, greedy = True
+            'remove_streams', args={'group_id': str, 'streams': str}, greedy = True
         )
         self.command_parser.add_subcommand('list')
         self.command_parser.add_subcommand(
-            'claim', {'group_id': str, 'text': str}, greedy = True, optional = True
+            'claim', args={'group_id': str, 'text': str}, greedy = True, optional = True
         )
-        self.command_parser.add_subcommand('unclaim', {'group_id': str, 'message_id': int})
+        self.command_parser.add_subcommand('unclaim', args={'group_id': str, 'message_id': int})
         self.command_parser.add_subcommand('announce')
-        self.command_parser.add_subcommand('unannounce', {'message_id': int})
+        self.command_parser.add_subcommand('unannounce', args={'message_id': int})
 
         # Init some usefule constants.
         self._get_emoji: Pattern[str] = re.compile(r'\s*:?([^:]+):?\s*')
@@ -178,13 +178,13 @@ class Group(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Args]]
+        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
 
         # Get command and parameters.
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
-        command, args = result
+        command, _, args = result
 
         if command == 'subscribe':
             return self._subscribe(message['sender_id'], args.group_id, message)

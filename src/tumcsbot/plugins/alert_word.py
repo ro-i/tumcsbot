@@ -51,10 +51,10 @@ class AlertWord(CommandPlugin):
             table = 'Alerts', schema = '(Phrase text primary key, Emoji text not null)'
         )
         self.command_parser: CommandParser = CommandParser()
-        self.command_parser.add_subcommand('add', {
+        self.command_parser.add_subcommand('add', args={
             'alert_phrase': str, 'emoji': Regex.get_emoji_name
         })
-        self.command_parser.add_subcommand('remove', {'alert_phrase': str})
+        self.command_parser.add_subcommand('remove', args={'alert_phrase': str})
         self.command_parser.add_subcommand('list')
 
     def handle_message(
@@ -62,7 +62,7 @@ class AlertWord(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Args]]
+        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
         if not self.client.user_is_privileged(message['sender_id']):
@@ -72,7 +72,7 @@ class AlertWord(CommandPlugin):
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
-        command, args = result
+        command, _, args = result
 
         if command == 'list':
             result_sql = self._db.execute(self._list_sql)

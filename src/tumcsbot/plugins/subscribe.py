@@ -60,29 +60,31 @@ class Subscribe(CommandPlugin):
         super().__init__(plugin_context)
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
-            'streams', {'dest_stream': Regex.get_stream_name, 'streams': Regex.get_stream_name},
+            'streams', args={
+                'dest_stream': Regex.get_stream_name, 'streams': Regex.get_stream_name
+            },
             greedy = True
         )
         self.command_parser.add_subcommand(
-            'users', {
+            'users', args={
                 'dest_stream': Regex.get_stream_name,
                 'users': lambda string: Regex.get_user_name(string, get_user_id = True)
             },
             greedy = True
         )
-        self.command_parser.add_subcommand('all_users', {'dest_stream': Regex.get_stream_name})
+        self.command_parser.add_subcommand('all_users', args={'dest_stream': Regex.get_stream_name})
 
     def handle_message(
         self,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Args]]
+        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
 
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
-        command, args = result
+        command, _, args = result
 
         if command == 'streams':
             return self.subscribe_streams(message, args.dest_stream, args.streams)

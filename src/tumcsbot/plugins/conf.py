@@ -37,15 +37,15 @@ class Conf(CommandPlugin):
         self._db.checkout_table('Conf', '(Key text primary key, Value text not null)')
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand('list')
-        self.command_parser.add_subcommand('set', {'key': str, 'value': str})
-        self.command_parser.add_subcommand('remove', {'key': str})
+        self.command_parser.add_subcommand('set', args={'key': str, 'value': str})
+        self.command_parser.add_subcommand('remove', args={'key': str})
 
     def handle_message(
         self,
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Args]]
+        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
 
         if not self.client.user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
@@ -53,7 +53,7 @@ class Conf(CommandPlugin):
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
-        command, args = result
+        command, _, args = result
 
         if command == 'list':
             response: str = 'Key | Value\n ---- | ----'

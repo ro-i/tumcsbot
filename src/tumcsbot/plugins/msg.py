@@ -42,9 +42,9 @@ class Msg(CommandPlugin):
             table = 'Messages', schema = '(MsgId text primary key, MsgText text not null)'
         )
         self.command_parser: CommandParser = CommandParser()
-        self.command_parser.add_subcommand('add', {'id': str, 'text': str})
-        self.command_parser.add_subcommand('send', {'id': str})
-        self.command_parser.add_subcommand('remove', {'id': str})
+        self.command_parser.add_subcommand('add', args={'id': str, 'text': str})
+        self.command_parser.add_subcommand('send', args={'id': str})
+        self.command_parser.add_subcommand('remove', args={'id': str})
         self.command_parser.add_subcommand('list')
 
     def handle_message(
@@ -52,7 +52,7 @@ class Msg(CommandPlugin):
         message: Dict[str, Any],
         **kwargs: Any
     ) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Args]]
+        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
         if not self.client.user_is_privileged(message['sender_id']):
@@ -62,7 +62,7 @@ class Msg(CommandPlugin):
         result = self.command_parser.parse(message['command'])
         if result is None:
             return Response.command_not_found(message)
-        command, args = result
+        command, _, args = result
 
         if command == 'list':
             response: str = '***List of Identifiers and Messages***\n'
