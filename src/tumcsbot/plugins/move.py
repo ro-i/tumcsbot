@@ -45,7 +45,7 @@ class Move(CommandPlugin):
         super().__init__(plugin_context)
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
-            'move', opts={'m': lambda m: int(m) if m else 1}, args={'dest': str}
+            'move', opts={'m': lambda m: int(m) if m else 1}, args={'dest': str}, greedy=True
         )
 
     def handle_message(
@@ -66,9 +66,11 @@ class Move(CommandPlugin):
             return Response.command_not_found(message)
         _, opts, args = result
 
+        dest: str = ' '.join(args.dest)
+
         if opts.m is not None:
-            return self._move_topic(message, args.dest, opts.m)
-        return self._move_stream(message, args.dest)
+            return self._move_topic(message, dest, opts.m)
+        return self._move_stream(message, dest)
 
     def _move_topic(
         self,
