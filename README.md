@@ -26,6 +26,7 @@ In order to grant those rights, run
 - `manage.py knight --for-real --permission=administer <bot_email>` (Zulip <= 3.2)
 - `manage.py change_user_role -r REALM_ID <bot_email> admin` and\
   `manage.py change_user_role -r REALM_ID <bot_email> administrator`
+- `manage.py change_user_role -r REALM_ID <bot_email> admin` (Zulip >= 4.0)
 
 in the appropriate directory of your zulip server installation.
 
