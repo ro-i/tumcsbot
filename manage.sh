@@ -69,7 +69,7 @@ test_func () {
 
 upgrade_requirements_func () {
 	# upgrade all requirements
-	pip3 install --user -U -r "${dest_dir}/requirements.txt"
+	pip3 install -U -r "${dest_dir}/requirements.txt"
 }
 
 virtualenv_func () {
@@ -80,7 +80,7 @@ virtualenv_func () {
 	. "${dest_dir}/venv/bin/activate"
 
 	# install dependecies
-	pip3 install --user -r "${dest_dir}/requirements.txt"
+	pip3 install -r "${dest_dir}/requirements.txt"
 
 	# exit virtual environment
 	deactivate
