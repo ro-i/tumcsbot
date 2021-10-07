@@ -202,6 +202,29 @@ class Client(ZulipClient):
 
         return user_ids
 
+    def get_user_ids_from_emails(
+        self,
+        emails: Iterable[str]
+    ) -> Optional[List[int]]:
+        """Get the user id from a user email address.
+
+        Return None on error.
+        """
+        user_ids: List[int] = []
+
+        for email in emails:
+            result: Dict[str, Any] = self.call_endpoint(
+                url=f'/users/{email}', method='GET', request={
+                    'client_gravatar': True, 'include_custom_profile_fields': False
+                }
+            )
+            if result['result'] != 'success':
+                return None
+            user_ids.append(result['user']['user_id'])
+
+        return user_ids
+
+
     def get_users(self, request: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Override method from parent class."""
         # Try to minimize the network traffic.

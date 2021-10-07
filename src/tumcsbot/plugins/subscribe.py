@@ -15,8 +15,9 @@ class Subscribe(CommandPlugin):
     syntax = cleandoc(
         """
         [beta]
-        subscribe streams <destination_stream_name> <stream_names>...
-          or subscribe users <destination_stream_name> <user_names>...
+        subscribe streams <destination_stream_name> <stream_name>...
+          or subscribe users <destination_stream_name> <user_name>...
+          or subscribe user_emails <destination_stream_name> <user_email>...
           or subscribe all_users <destination_stream_name>
         """
     )
@@ -29,6 +30,8 @@ class Subscribe(CommandPlugin):
         - `users`
         Subscribe all users with the specified names to the \
         destination stream.
+        If the `-e` flag is present, take the user names as \
+        email addresses.
         - `all_users`
         Subscribe all users to the destination stream.
         [administrator/moderator rights needed]
@@ -52,6 +55,7 @@ class Subscribe(CommandPlugin):
 
         ````text
         subscribe streams "destination stream" "#**test stream**" mystream
+        subscribe user_emails "destination stream" "foo@bar.com" "user42@zulip.org"
         ````
         """
     )
@@ -69,6 +73,12 @@ class Subscribe(CommandPlugin):
             'users', args={
                 'dest_stream': Regex.get_stream_name,
                 'users': lambda string: Regex.get_user_name(string, get_user_id = True)
+            },
+            greedy = True
+        )
+        self.command_parser.add_subcommand(
+            'user_emails', args={
+                'dest_stream': Regex.get_stream_name, 'user_emails': str,
             },
             greedy = True
         )
@@ -90,6 +100,8 @@ class Subscribe(CommandPlugin):
             return self.subscribe_streams(message, args.dest_stream, args.streams)
         if command == 'users':
             return self.subscribe_users(message, args.dest_stream, args.users)
+        if command == 'user_emails':
+            return self.subscribe_user_emails(message, args.dest_stream, args.user_emails)
         if command == 'all_users':
             return self.subscribe_all_users(message, args.dest_stream)
 
@@ -134,6 +146,21 @@ class Subscribe(CommandPlugin):
         return Response.build_message(
             message, 'Failed to subscribe the following streams:\n' + '\n'.join(failed)
         )
+
+    def subscribe_user_emails(
+        self,
+        message: Dict[str, Any],
+        dest_stream: str,
+        user_emails: List[str]
+    ) -> Union[Response, Iterable[Response]]:
+        user_ids: Optional[List[int]] = self.client.get_user_ids_from_emails(user_emails)
+        if user_ids is None:
+            return Response.build_message(message, 'error: could not get the user ids.')
+
+        if not self.client.subscribe_users(user_ids, dest_stream):
+            return Response.error(message)
+
+        return Response.ok(message)
 
     def subscribe_users(
         self,
