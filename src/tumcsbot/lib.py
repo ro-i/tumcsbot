@@ -819,3 +819,17 @@ def stream_name_match(stream_reg: str, stream_name: str) -> bool:
     Currently, Zulip considers stream names to be case insensitive.
     """
     return re.fullmatch(stream_reg, stream_name, flags = re.I) is not None
+
+
+def validate_and_return_regex(regex: Optional[str]) -> Optional[str]:
+    """Validate a regex and return it.
+
+    Return None in case the regex is invalid.
+    """
+    if regex is None:
+        return None
+    try:
+        re.compile(regex)
+        return regex
+    except re.error:
+        return None
