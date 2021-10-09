@@ -1,7 +1,7 @@
 TUM CS Bot
 ==========
 
-An interactive bot for zulip.in.tum.de, the [Zulip Chat](https://zulipchat.com/)
+An interactive bot for zulip.in.tum.de, the [Zulip Chat](https://zulip.com/)
 of the Department of Informatics of the Technical University of Munich.
 
 **Note: This bot is currently under development and not yet production-ready!**
@@ -11,8 +11,8 @@ setup
 -----
 
 - The bot is intended to run as `Generic` bot, owned by an administrator.
-  - [add a bot](https://zulipchat.com/help/add-a-bot-or-integration)
-  - [about bots](https://zulipchat.com/help/bots-and-integrations)
+  - [add a bot](https://zulip.com/help/add-a-bot-or-integration)
+  - [about bots](https://zulip.com/help/bots-and-integrations)
 - Get the bot's `zuliprc` file. Per default, it is expected to be located
 right in the root of the bot's git repo.
 - Configure `supervisor` (used by Zulip installations per default) to handle
@@ -20,13 +20,10 @@ the bot by placing the configuration file `zulip_tumcsbot.conf` in
 `/etc/supervisor/conf.d`.
 
 Note: For some commands such as `subscribe` or `solved` the bot needs
-administrator and `api_super_user` rights.
-([documentation for Zulip 3.x](https://github.com/zulip/zulip/blob/3.x/docs/production/security-model.md)).
+administrator rights.
+([Zulip Security model #Users and bots](https://zulip.readthedocs.io/en/latest/production/security-model.html#users-and-bots)).
 In order to grant those rights, run
-- `manage.py knight --for-real --permission=administer <bot_email>` (Zulip <= 3.2)
-- `manage.py change_user_role -r REALM_ID <bot_email> admin` and\
-  `manage.py change_user_role -r REALM_ID <bot_email> administrator`
-- `manage.py change_user_role -r REALM_ID <bot_email> admin` (Zulip >= 4.0)
+- `./manage.py change_user_role -r REALM_ID <bot_email> admin` (Zulip >= 4.0)
 
 in the appropriate directory of your zulip server installation.
 
@@ -86,7 +83,7 @@ In order to apply database migration scripts conveniently, there is the script
 
 additional `make` targets
 -------------------------
-- `make tests` runs some unit tests.
+- `make tests` runs some unit tests. (You can also use `pytest`.)
 - `make mypy` runs `mypy --strict` and should not show any issue.
 - `make static_analysis` currently runs `mypy` and `pylint`.
 - `make migrations` applies the migrations in `migrations.sql` to the database
