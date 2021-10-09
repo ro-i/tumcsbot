@@ -14,7 +14,6 @@ class Subscribe(CommandPlugin):
     plugin_name = 'subscribe'
     syntax = cleandoc(
         """
-        [beta]
         subscribe streams <destination_stream_name> <stream_name>...
           or subscribe users <destination_stream_name> <user_name>...
           or subscribe user_emails <destination_stream_name> <user_email>...
@@ -30,10 +29,16 @@ class Subscribe(CommandPlugin):
         - `users`
         Subscribe all users with the specified names to the \
         destination stream.
-        If the `-e` flag is present, take the user names as \
-        email addresses.
+        - `user_emails`
+        Subscribe all users with the specified email addresses to the \
+        destination stream. Note thet the email addresses need to match \
+        the `delivery_email` field. Check if you and me are having \
+        access to it. (In the Organization Settings of your Zulip \
+        Server, the value of `Who can access user email addresses` needs \
+        to be at least `Admins only`.)
         - `all_users`
         Subscribe all users to the destination stream.
+
         [administrator/moderator rights needed]
 
         If the destination stream does not exist yet, it will be \
