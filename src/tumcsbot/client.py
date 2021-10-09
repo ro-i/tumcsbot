@@ -16,7 +16,7 @@ import re
 import time
 
 from collections.abc import Iterable as IterableClass
-from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Union
+from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Set, Union
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
@@ -177,6 +177,39 @@ class Client(ZulipClient):
 
         return None
 
+    def get_user_ids_from_attribute(
+        self,
+        attribute: str,
+        values: Iterable[Any],
+        case_sensitive: bool = True
+    ) -> Optional[List[int]]:
+        """Get the user ids from a given user attribute.
+
+        Get and return a list of user ids of all users whose profiles
+        contain the attribute "attribute" with a value present in
+        "values.
+        If case_sensitive is set to False, the values will be
+        interpreted as strings and compared case insensitively.
+        Return None on error.
+        """
+        result: Dict[str, Any] = self.get_users()
+        if result['result'] != 'success':
+            return None
+
+        if not case_sensitive:
+            values = map(lambda x: str(x).lower(), values)
+
+        value_set: Set[Any] = set(values)
+
+        return [
+            user['user_id']
+            for user in result['members']
+            if attribute in user and (
+                user[attribute] in value_set if case_sensitive
+                else str(user[attribute]).lower() in value_set
+            )
+        ]
+
     def get_user_ids_from_display_names(
         self,
         display_names: Iterable[str]
@@ -188,19 +221,7 @@ class Client(ZulipClient):
         of user display names.
         Return None on error.
         """
-        result: Dict[str, Any] = self.get_users()
-        if result['result'] != 'success':
-            return None
-
-        user_ids: List[int] = []
-
-        for display_name in display_names:
-            user_ids.extend(
-                user['user_id'] for user in result['members']
-                if user['full_name'] == display_name
-            )
-
-        return user_ids
+        return self.get_user_ids_from_attribute('full_name', display_names)
 
     def get_user_ids_from_emails(
         self,
@@ -210,20 +231,7 @@ class Client(ZulipClient):
 
         Return None on error.
         """
-        user_ids: List[int] = []
-
-        for email in emails:
-            result: Dict[str, Any] = self.call_endpoint(
-                url=f'/users/{email}', method='GET', request={
-                    'client_gravatar': True, 'include_custom_profile_fields': False
-                }
-            )
-            if result['result'] != 'success':
-                return None
-            user_ids.append(result['user']['user_id'])
-
-        return user_ids
-
+        return self.get_user_ids_from_attribute('delivery_email', emails, case_sensitive = False)
 
     def get_users(self, request: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Override method from parent class."""
