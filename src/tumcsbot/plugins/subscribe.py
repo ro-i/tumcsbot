@@ -170,16 +170,21 @@ class Subscribe(CommandPlugin):
         self,
         message: Dict[str, Any],
         dest_stream: str,
-        users: List[str]
+        users: List[Union[str, Tuple[str, Optional[int]]]]
     ) -> Union[Response, Iterable[Response]]:
-        user_ids: Optional[List[int]] = self.client.get_user_ids_from_display_names(
-            filter(lambda o: isinstance(o, str), users)
-        )
+        # First, get all the ids of the users whose ids we do not already know.
+        user_ids: Optional[List[int]] = self.client.get_user_ids_from_display_names(map(
+            lambda o: o[0] if isinstance(o, tuple) else o,
+            filter(
+                lambda o: isinstance(o, str) or (isinstance(o, tuple) and o[1] is None), users
+            )
+        ))
         if user_ids is None:
             return Response.build_message(message, 'error: could not get the user ids.')
 
         user_ids.extend(map(
-            lambda t: cast(int, t[1]), filter(lambda o: isinstance(o, tuple), users)
+            lambda t: cast(int, t[1]),
+            filter(lambda o: isinstance(o, tuple) and isinstance(o[1], int), users)
         ))
 
         if not self.client.subscribe_users(user_ids, dest_stream):
