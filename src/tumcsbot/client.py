@@ -353,7 +353,8 @@ class Client(ZulipClient):
         self,
         user_ids: List[int],
         stream_name: str,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        allow_private_streams: bool = False
     ) -> bool:
         """Subscribe a list of user ids to a public stream.
 
@@ -369,7 +370,7 @@ class Client(ZulipClient):
         chunk_size: int = 100
         success: bool = True
 
-        if self.private_stream_exists(stream_name):
+        if not allow_private_streams and self.private_stream_exists(stream_name):
             return False
 
         subscription: Dict[str, str] = {'name': stream_name}

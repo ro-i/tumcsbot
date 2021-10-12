@@ -25,7 +25,6 @@ class Subscribe(CommandPlugin):
         - `streams`
         Subscribe all subscribers of the given streams to the \
         destination stream.
-        [administrator/moderator rights needed]
         - `users`
         Subscribe all users with the specified names to the \
         destination stream.
@@ -162,7 +161,7 @@ class Subscribe(CommandPlugin):
         if user_ids is None:
             return Response.build_message(message, 'error: could not get the user ids.')
 
-        if not self.client.subscribe_users(user_ids, dest_stream):
+        if not self.client.subscribe_users(user_ids, dest_stream, allow_private_streams=True):
             return Response.error(message)
 
         return Response.ok(message)
