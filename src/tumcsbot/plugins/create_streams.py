@@ -18,7 +18,19 @@ class CreateStreams(CommandPlugin):
         Create a public stream for every (stream,description)-tuple \
         passed to this command. You may provide a quoted empty string
         as description.
+        The (stream name, stream description)-tuples may be separated
+        by any whitespace.
         [administrator/moderator rights needed]
+
+        Example:
+        ````text
+        create_streams "'stream without description',''" "'stream with description','descriptive description'"
+        "'next useful stream with \\"quotes\\"','nice'"
+        ````
+
+        Notes:
+        - It is not yet possible to have single-quotes (`'`) in stream \
+        names or descriptions.
         """
         )
 
