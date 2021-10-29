@@ -460,7 +460,7 @@ class Client(ZulipClient):
             return False
         user: Dict[str, Any] = result['user']
 
-        if 'role' in user and isinstance(user['role'], int) and user['role'] in [100, 200, 300]:
+        if 'role' in user and isinstance(user['role'], int) and user['role'] in [100, 200]:
             return True
         if 'is_admin' in user and isinstance(user['is_admin'], bool):
             return user['is_admin']
