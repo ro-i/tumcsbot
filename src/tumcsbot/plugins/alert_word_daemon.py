@@ -11,6 +11,7 @@ its database table.
 
 import re
 
+from random import randint
 from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
 
 from tumcsbot.lib import DB, Response
@@ -65,7 +66,7 @@ class AlertWordDaemon(SubBotPlugin):
         return [
             Response.build_reaction(message = event['message'], emoji = emoji)
             for pattern, emoji in self._bindings
-            if pattern.search(content) is not None
+            if randint(1, 6) == 3 and pattern.search(content) is not None
         ]
 
     def is_responsible(self, event: Dict[str, Any]) -> bool:
