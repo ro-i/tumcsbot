@@ -7,11 +7,10 @@ from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from tumcsbot.lib import CommandParser, DB, Response
-from tumcsbot.plugin import PluginContext, CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Msg(CommandPlugin):
-    plugin_name = 'msg'
+class Msg(PluginCommand, PluginThread):
     syntax = cleandoc(
         """
         msg add <identifier> <text>
@@ -33,10 +32,9 @@ class Msg(CommandPlugin):
     _search_sql: str = 'select MsgText from Messages where MsgId = ?'
     _update_sql: str = 'replace into Messages values (?,?)'
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
+    def _init_plugin(self) -> None:
         # Get own database connection.
-        self._db = DB()
+        self._db: DB = DB()
         # Check for database table.
         self._db.checkout_table(
             table = 'Messages', schema = '(MsgId text primary key, MsgText text not null)'
@@ -47,15 +45,11 @@ class Msg(CommandPlugin):
         self.command_parser.add_subcommand('remove', args={'id': str})
         self.command_parser.add_subcommand('list')
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
         result_sql: List[Tuple[Any, ...]]
 
-        if not self.client.user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         # Get command and parameters.
@@ -78,7 +72,7 @@ class Msg(CommandPlugin):
             if not result_sql:
                 return Response.command_not_found(message)
             # Remove requesting message.
-            self.client.delete_message(message['id'])
+            self.client().delete_message(message['id'])
             return Response.build_message(message, result_sql[0][0])
 
         if command == 'add':

@@ -7,11 +7,10 @@ from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
 from tumcsbot.lib import DB, Response
-from tumcsbot.plugin import CommandPlugin, PluginContext
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Source(CommandPlugin):
-    plugin_name = 'sql'
+class Source(PluginCommand, PluginThread):
     syntax = cleandoc(
         """
         sql <sql_script>
@@ -27,19 +26,14 @@ class Source(CommandPlugin):
     )
     _list_sql: str = 'select * from sqlite_master where type = "table"'
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
+    def _init_plugin(self) -> None:
         # Get own read-only (!!!) database connection.
-        self._db = DB(read_only = True)
+        self._db: DB = DB(read_only = True)
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         result_sql: List[Tuple[Any, ...]]
 
-        if not self.client.user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         try:

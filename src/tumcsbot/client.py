@@ -3,20 +3,14 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-"""Wrapper around Zulip's Client class.
-
-Classes:
---------
-Client   A wrapper around zulip.Client to be used by the plugins.
-         See the class doc for the additional attributes and methods.
-"""
+"""Wrapper around Zulip's Client class."""
 
 import logging
 import re
 import time
-
 from collections.abc import Iterable as IterableClass
 from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Set, Union
+
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
@@ -54,7 +48,7 @@ class Client(ZulipClient):
         self.ping: str = '@**{}**'.format(self.get_profile()['full_name'])
         self.ping_len: int = len(self.ping)
         self.register_params: Dict[str, Any] = {}
-        self._db = DB()
+        self._db: DB = DB()
         self._db.checkout_table(
             'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
         )
@@ -121,7 +115,7 @@ class Client(ZulipClient):
         """
         def without_db() -> List[str]:
             result: Dict[str, Any] = self.get_streams(
-                include_public = True, include_subscribed = False
+                include_public=True, include_subscribed=False
             )
             if result['result'] != 'success':
                 return []
@@ -139,6 +133,14 @@ class Client(ZulipClient):
             logging.exception(e)
             return without_db()
 
+    def get_raw_message(self, message_id: int, apply_markdown: bool = True) -> Dict[str, str]:
+        """Adapt original code and add apply_markdown."""
+        return self.call_endpoint(
+            url=f"messages/{message_id}",
+            method="GET",
+            request={"apply_markdown": apply_markdown}
+        )
+
     def get_streams_from_regex(self, regex: str) -> List[str]:
         """Get the names of all public streams matching a regex.
 
@@ -152,7 +154,7 @@ class Client(ZulipClient):
             return []
 
         try:
-            pat: Pattern[str] = re.compile(regex, flags = re.I)
+            pat: Pattern[str] = re.compile(regex, flags=re.I)
         except re.error:
             return []
 
@@ -167,7 +169,7 @@ class Client(ZulipClient):
         Return the stream name as string or None if the stream name
         could not be determined.
         """
-        result: Dict[str, Any] = self.get_streams(include_all_active = True)
+        result: Dict[str, Any] = self.get_streams(include_all_active=True)
         if result['result'] != 'success':
             return None
 
@@ -210,10 +212,7 @@ class Client(ZulipClient):
             )
         ]
 
-    def get_user_ids_from_display_names(
-        self,
-        display_names: Iterable[str]
-    ) -> Optional[List[int]]:
+    def get_user_ids_from_display_names(self, display_names: Iterable[str]) -> Optional[List[int]]:
         """Get the user id from a user display name.
 
         Since there may be multiple users with the same display name,
@@ -231,13 +230,13 @@ class Client(ZulipClient):
 
         Return None on error.
         """
-        return self.get_user_ids_from_attribute('delivery_email', emails, case_sensitive = False)
+        return self.get_user_ids_from_attribute('delivery_email', emails, case_sensitive=False)
 
     def get_users(self, request: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Override method from parent class."""
         # Try to minimize the network traffic.
         if request is not None:
-            request.update(client_gravatar = True, include_custom_profile_fields = False)
+            request.update(client_gravatar=True, include_custom_profile_fields=False)
         return super().get_users(request)
 
     def is_only_pm_recipient(self, message: Dict[str, Any]) -> bool:
@@ -264,7 +263,7 @@ class Client(ZulipClient):
         Return false if there is no stream with this name or if the
         stream is not private.
         """
-        result: Dict[str, Any] = self.get_streams(include_all_active = True)
+        result: Dict[str, Any] = self.get_streams(include_all_active=True)
         if result['result'] != 'success':
             return False # TODO?
 
@@ -287,11 +286,15 @@ class Client(ZulipClient):
         call_on_each_event.
         """
         logging.debug('event_types: %s, narrow: %s', str(event_types), str(narrow))
-        return super().register(event_types, narrow, **self.register_params)
+        return super().register(event_types, narrow, **self.register_params, **kwargs)
 
-    def send_response(self, response: Response) -> Dict[str, Any]:
+    def send_response(self, response: Response, internal: bool = False) -> Dict[str, Any]:
         """Send one single response."""
         logging.debug('send_response: %s', str(response))
+
+        # TODO: Handle internal!
+        if internal:
+            return {}
 
         if response.message_type == MessageType.MESSAGE:
             return self.send_message(response.response)
@@ -305,7 +308,8 @@ class Client(ZulipClient):
             Response,
             Iterable[Union[Response, Iterable[Response]]],
             Union[Response, Iterable[Response]]
-        ]
+        ],
+        internal: bool = False
     ) -> None:
         """Send the given responses."""
         if responses is None:
@@ -313,11 +317,11 @@ class Client(ZulipClient):
             return
 
         if not isinstance(responses, IterableClass):
-            self.send_response(responses)
+            self.send_response(responses, internal)
             return
 
         for response in responses:
-            self.send_responses(response)
+            self.send_responses(response, internal)
 
 
     def subscribe_all_from_stream_to_stream(
@@ -343,7 +347,7 @@ class Client(ZulipClient):
                 or self.private_stream_exists(to_stream)):
             return False
 
-        subs: Dict[str, Any] = self.get_subscribers(stream = from_stream)
+        subs: Dict[str, Any] = self.get_subscribers(stream=from_stream)
         if subs['result'] != 'success':
             return False
 
@@ -375,7 +379,7 @@ class Client(ZulipClient):
 
         subscription: Dict[str, str] = {'name': stream_name}
         if description is not None:
-            subscription.update(description = description)
+            subscription.update(description=description)
 
         for i in range(0, len(user_ids), chunk_size):
             # (a too large index will be automatically reduced to len())
@@ -383,8 +387,7 @@ class Client(ZulipClient):
 
             while True:
                 result: Dict[str, Any] = self.add_subscriptions(
-                    streams = [subscription],
-                    principals = user_id_chunk
+                    streams=[subscription], principals=user_id_chunk
                 )
                 if result['result'] == 'success':
                     break
@@ -397,72 +400,23 @@ class Client(ZulipClient):
 
         return success
 
-#    def subscribe_user(
-#        self,
-#        user_id: int,
-#        stream_name: str
-#    ) -> bool:
-#        """Subscribe a user to a public stream.
-#
-#        The subscription is only executed if the user is not yet
-#        subscribed to the stream with the given name.
-#        See docs: https://zulip.com/api/get-events#stream-add.
-#        Do not subscribe to private streams.
-#
-#        Return True if the user has already subscribed to the given
-#        stream or if they now are subscribed and False otherwise.
-#        """
-#        result: Dict[str, Any]
-#
-#        if self.private_stream_exists(stream_name):
-#            return False
-#
-#        result = self.get_stream_id(stream_name)
-#        if result['result'] != 'success':
-#            return False
-#        stream_id: int = result['stream_id']
-#
-#        # Check whether the user has already subscribed to that stream.
-#        result = self.call_endpoint(
-#            url = '/users/{}/subscriptions/{}'.format(user_id, stream_id),
-#            method = 'GET'
-#        )
-#        # If the request failed, we try to subscribe anyway.
-#        if result['result'] == 'success' and result['is_subscribed']:
-#            return True
-#        elif result['result'] != 'success':
-#            logging.warning('failed subscription status check, stream_id %s', stream_id)
-#
-#        success: bool = self.subscribe_users([user_id], stream_name)
-#        if not success:
-#            logging.warning('cannot subscribe %s to stream: %s', user_id, str(result))
-#
-#        return success
-
-    def user_is_privileged(self, user_id: int) -> bool:
+    def user_is_privileged(self, user_id: int, allow_moderator: bool = False) -> bool:
         """Check whether a user is allowed to perform privileged commands.
-
-        Some commands of this bot are only allowed to be performed by
-        privileged users. Which user roles are considered to be privileged
-        in the context of this bot:
-            - prior to Zulip 4.0:
-                Organization owner, Organization administrator
-            - since Zulip 4.0:
-                Organization owner, Organization administrator,
-                Organization moderator
 
         Arguments:
         ----------
-            user_id    The user_id to examine.
+            user_id          The user_id to examine.
+            allow_moderator  Whether the moderator role should be
+                             considered as privileged, too.
+                             Defaults to False.
         """
         result: Dict[str, Any] = self.get_user_by_id(user_id)
-        if result['result'] != 'success':
+        if result["result"] != "success":
             return False
-        user: Dict[str, Any] = result['user']
+        user: Dict[str, Any] = result["user"]
 
-        if 'role' in user and isinstance(user['role'], int) and user['role'] in [100, 200]:
-            return True
-        if 'is_admin' in user and isinstance(user['is_admin'], bool):
-            return user['is_admin']
-
-        return False
+        return (
+            "role" in user
+            and isinstance(user["role"], int)
+            and user["role"] in [100, 200] or (allow_moderator and user["role"] == 300)
+        )

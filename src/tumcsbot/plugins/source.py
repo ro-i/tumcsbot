@@ -6,19 +6,14 @@
 from typing import Any, Dict, Iterable, Union
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Source(CommandPlugin):
-    plugin_name = 'source'
+class Source(PluginCommand, PluginThread):
     syntax = 'source'
     description = 'Post the link to the repository of my source code.'
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         return Response.build_message(
             message, 'https://github.com/ro-i/tumcsbot'
         )

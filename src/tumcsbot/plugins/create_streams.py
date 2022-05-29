@@ -7,18 +7,18 @@ from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from tumcsbot.lib import split, Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class CreateStreams(CommandPlugin):
-    plugin_name = 'create_streams'
+class CreateStreams(PluginCommand, PluginThread):
+    schedulable = True
     syntax = 'create_streams <stream_name>,<stream_description>...'
     description = cleandoc(
         """
         Create a public stream for every (stream,description)-tuple \
-        passed to this command. You may provide a quoted empty string
+        passed to this command. You may provide a quoted empty string \
         as description.
-        The (stream name, stream description)-tuples may be separated
+        The (stream name, stream description)-tuples may be separated \
         by any whitespace.
         [administrator/moderator rights needed]
 
@@ -34,12 +34,8 @@ class CreateStreams(CommandPlugin):
         """
         )
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         failed: List[str] = []
@@ -56,7 +52,7 @@ class CreateStreams(CommandPlugin):
             if not stream:
                 failed.append('one empty stream name')
                 continue
-            result: Dict[str, Any] = self.client.add_subscriptions(
+            result: Dict[str, Any] = self.client().add_subscriptions(
                 streams = [{'name': stream, 'description': desc}]
             )
             if result['result'] != 'success':

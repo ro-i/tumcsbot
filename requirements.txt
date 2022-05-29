@@ -1,1 +1,4 @@
+mypy
+pylint
+pytest
 zulip

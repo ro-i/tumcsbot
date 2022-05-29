@@ -3,20 +3,17 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import logging
 import os
 import subprocess as sp
-
 from inspect import cleandoc
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Update(CommandPlugin):
-    plugin_name = 'update'
+class Update(PluginCommand, PluginThread):
     syntax = 'update'
     description = cleandoc(
         """
@@ -27,12 +24,8 @@ class Update(CommandPlugin):
     _git_pull_cmd: List[str] = ['git', 'pull']
     _timeout: int = 15
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         # Get the dirname of this file (which is located in the git repo).
@@ -41,7 +34,7 @@ class Update(CommandPlugin):
         try:
             os.chdir(git_dir)
         except Exception as e:
-            logging.exception(e)
+            self.logger.exception(e)
             return Response.build_message(
                 message,
                 f'Cannot access the directory of my git repo {git_dir}. Please contact the admin.'

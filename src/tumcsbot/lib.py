@@ -20,19 +20,26 @@ split               Similar to the default split, but respects quotes.
 stream_names_equal  Decide whether two stream names are equal.
 """
 
+import json
 import re
 import shlex
 import sqlite3 as sqlite
-
 from argparse import Namespace
 from enum import Enum
-from inspect import cleandoc
+from importlib import import_module
+from inspect import cleandoc, getmembers, isclass, ismodule
 from itertools import repeat
 from os.path import isabs
-from typing import cast, Any, Callable, Dict, Final, List, Match, Optional, Pattern, Tuple, Union
+from typing import (
+    Any, Callable, Dict, Final, Iterable, List, Match, Optional, Pattern, Tuple, Type, TypeVar,
+    Union, cast
+)
 
 
-LOGGING_FORMAT: str = (
+T = TypeVar('T')
+
+
+LOGGING_FORMAT: Final[str] = (
     '%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s'
 )
 
@@ -41,6 +48,8 @@ class StrEnum(str, Enum):
     """Construct a string enum.
 
     See https://docs.python.org/3/library/enum.html#others.
+    This own enum class is deprecated since Python 3.10 but is going
+    to stay for some time in order to ensure compatibility.
     """
 
 
@@ -52,9 +61,9 @@ class MessageType(StrEnum):
     NONE     No message.
     """
 
-    MESSAGE: str = 'message'
-    EMOJI: str = 'emoji'
-    NONE: str = 'none'
+    MESSAGE = 'message'
+    EMOJI = 'emoji'
+    NONE = 'none'
 
 
 class Regex:
@@ -68,11 +77,15 @@ class Regex:
     _EMOJI_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
         r':({}):'.format(_EMOJI.pattern)
     )
+    _TOPIC: Final[Pattern[str]] = re.compile(r'.+')
     # Note: Currently, there are no further restrictions on stream names posed
     # by Zulip. That is why we cannot enforce sensible restrictions here.
     _STREAM: Final[Pattern[str]] = re.compile(r'.+')
     _STREAM_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
         r'#{0}({1}){0}'.format(_ASTERISKS.pattern, _STREAM.pattern)
+    )
+    _STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
+        r'#{0}({1})>({2}){0}'.format(_ASTERISKS.pattern, r'[^>]+', _TOPIC.pattern)
     )
     _USER: Final[Pattern[str]] = re.compile(r'[^\*\`\\\>\"\@]+')
     _USER_AUTOCOMPLETED_TEMPLATE: str = r'{0}({1}){0}'.format(
@@ -168,6 +181,31 @@ class Regex:
             [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])], string.strip()
         )
         return None if not result else result[0]
+
+    @classmethod
+    def get_stream_and_topic_name(cls, string: str) -> Optional[Tuple[str, Optional[str]]]:
+        """Extract the stream and the topic name from a string.
+
+        Match the whole string and try to be smart:
+           direct topic links: #**stream name>topic name**
+                            -> (stream name, topic name)
+           stream links: #**stream_name** -> (stream_name, None)
+           plain stream names: stream_name -> (stream_name, None)
+
+        Leading/trailing whitespace is discarded.
+        Return None if no match could be found.
+
+        Note that there may not occur a `>`-character in the stram name.
+        This is related to the current behavior of the Zulip server and
+        would need to be changed there.
+        """
+        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+            [(cls._STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE, [1, 2]),
+             (cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]),
+             (cls._STREAM, [0])],
+            string.strip()
+        )
+        return None if not result else (result[0], result[1] if len(result) > 1 else None)
 
     @classmethod
     def get_user_name(
@@ -393,15 +431,16 @@ class CommandParser:
         arguments and the non-option tokens.
         Return None on error.
         """
-        result: Dict[str, Any] = {}
         index: int = 0
+        result: Dict[str, Any] = {}
+        token: str = ""
 
         opts_len: int = len(opts)
         if not opts_len:
             return ({}, tokens)
 
         for index in range(len(tokens)):
-            token: str = tokens[index]
+            token = tokens[index]
             # Stop at the first non-option token.
             if token[0] != '-':
                 break
@@ -423,7 +462,7 @@ class CommandParser:
                 return None
 
         # Skip last option if there have been only options.
-        if tokens and token[0] == '-':
+        if token and token[0] == '-':
             index += 1
 
         # Mark all non-existant flags as False and fill the values of
@@ -478,8 +517,10 @@ class DB:
         schema  schema of the table in the form of
                     '(Name Type, ...)' --> valid SQL!
         """
-        if not self.table_exists(table):
-            self.execute('create table {} {};'.format(table, schema), commit = True)
+        self.execute('create table if not exists {} {};'.format(table, schema), commit=True)
+
+    def close(self) -> None:
+        self.connection.close()
 
     def execute(
         self,
@@ -501,12 +542,6 @@ class DB:
         if commit and not self.read_only:
             self.connection.commit()
         return result.fetchall()
-
-    def table_exists(self, table: str) -> bool:
-        """Check if a table with the given name exists."""
-        return bool(self.execute(
-            'select * from sqlite_master where type = "table" and name = ?', table
-        ))
 
 
 class Response:
@@ -554,7 +589,9 @@ class Response:
         return self.__str__()
 
     def __str__(self) -> str:
-        return '({}, {})'.format(self.message_type, str(self.response))
+        return json.dumps({
+            "message_type": str(self.message_type), "response": str(self.response)
+        })
 
     def is_none(self) -> bool:
         """Check whether this response has the MessageType 'None'."""
@@ -672,6 +709,7 @@ class Response:
             message,
             cls.admin_err_msg.format(message['sender_full_name'])
         )
+        # TODO: rename to priviledge_err and adapt message
 
     @classmethod
     def command_not_found(
@@ -725,6 +763,16 @@ class Response:
     def none(cls) -> 'Response':
         """No response."""
         return cls(MessageType.NONE, {})
+
+
+def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Type[T]]:
+    plugin_classes: List[Type[T]] = []
+    for _, module in getmembers(import_module(module_path), ismodule):
+        plugin_classes.extend(filter(
+            lambda c: c.__module__ == module.__name__ and issubclass(c, class_type), # type: ignore
+            map(lambda t: t[1], getmembers(module, isclass)) # type: ignore
+        ))
+    return plugin_classes
 
 
 def split(

@@ -7,11 +7,10 @@ from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from tumcsbot.lib import split, validate_and_return_regex, Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class ArchiveStreams(CommandPlugin):
-    plugin_name = 'archive_streams'
+class ArchiveStreams(PluginCommand, PluginThread):
     syntax = 'archive_streams <stream_regex>...'
     description = cleandoc(
         """
@@ -27,12 +26,8 @@ class ArchiveStreams(CommandPlugin):
         """
         )
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         stream_regexes: Optional[List[Any]] = split(
@@ -44,17 +39,17 @@ class ArchiveStreams(CommandPlugin):
         response: List[str] = []
 
         for stream_regex in stream_regexes:
-            streams: List[str] = self.client.get_streams_from_regex(stream_regex)
+            streams: List[str] = self.client().get_streams_from_regex(stream_regex)
             removed: int = 0
 
             for stream in streams:
-                result: Dict[str, Any] = self.client.get_stream_id(stream)
+                result: Dict[str, Any] = self.client().get_stream_id(stream)
                 if result['result'] != 'success':
                     continue
                 stream_id: int = result['stream_id']
 
                 # Check if stream is empty.
-                result = self.client.get_messages({
+                result = self.client().get_messages({
                     'anchor': 'oldest',
                     'num_before': 0,
                     'num_after': 1,
@@ -66,7 +61,7 @@ class ArchiveStreams(CommandPlugin):
                     continue
 
                 # Archive the stream: https://zulip.com/help/archive-a-stream
-                result = self.client.delete_stream(stream_id)
+                result = self.client().delete_stream(stream_id)
                 if result['result'] == 'success':
                     removed += 1
 

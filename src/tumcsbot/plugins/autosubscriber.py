@@ -13,25 +13,21 @@ receive events for all public streams.
 [1] https://zulip.com/api/register-queue#parameter-all_public_streams
 """
 
-import logging
-
-from typing import Any, Dict, Iterable, Union
+from typing import Iterable, Union
 
 from tumcsbot.lib import DB, Response
-from tumcsbot.plugin import Plugin, PluginContext
+from tumcsbot.plugin import Event, PluginThread
 
 
-class AutoSubscriber(Plugin):
-    plugin_name = 'autosubscriber'
-    events = ['stream']
+class AutoSubscriber(PluginThread):
+    zulip_events = ['stream']
     _insert_sql: str = 'insert or ignore into PublicStreams values (?, 0)'
     _select_sql: str = 'select StreamName, Subscribed from PublicStreams'
     _subscribe_sql: str = 'update PublicStreams set Subscribed = 1 where StreamName = ?'
     _remove_sql: str = 'delete from PublicStreams where StreamName = ?'
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
-        self._db = DB()
+    def _init_plugin(self) -> None:
+        self._db: DB = DB()
         self._db.checkout_table(
             'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
         )
@@ -41,34 +37,30 @@ class AutoSubscriber(Plugin):
                 continue
             self._handle_stream(stream_name, False)
 
-    def is_responsible(self, event: Dict[str, Any]) -> bool:
+    def is_responsible(self, event: Event) -> bool:
         return (super().is_responsible(event)
                 and (
-                    event['op'] == 'create'
-                    or event['op'] == 'update'
-                    or event['op'] == 'delete'
+                    event.data['op'] == 'create'
+                    or event.data['op'] == 'update'
+                    or event.data['op'] == 'delete'
                 ))
 
-    def handle_event(
-        self,
-        event: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if event['op'] == 'create':
-            for stream in event['streams']:
+    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
+        if event.data['op'] == 'create':
+            for stream in event.data['streams']:
                 self._handle_stream(stream['name'], stream['invite_only'])
-        elif event['op'] == 'delete':
-            for stream in event['streams']:
+        elif event.data['op'] == 'delete':
+            for stream in event.data['streams']:
                 self._remove_stream_from_table(stream['name'])
-        elif event['op'] == 'update':
-            if event['property'] == 'invite_only':
-                self._handle_stream(event['name'], event['value'])
-            elif (event['property'] == 'name' and not
-                  self.client.private_stream_exists(event['name'])):
+        elif event.data['op'] == 'update':
+            if event.data['property'] == 'invite_only':
+                self._handle_stream(event.data['name'], event.data['value'])
+            elif (event.data['property'] == 'name' and not
+                  self.client().private_stream_exists(event.data['name'])):
                 # Remove the previous stream name from the database.
-                self._remove_stream_from_table(event['name'])
+                self._remove_stream_from_table(event.data['name'])
                 # Add the new stream name.
-                self._handle_stream(event['value'], False)
+                self._handle_stream(event.data['value'], False)
 
         return Response.none()
 
@@ -85,19 +77,19 @@ class AutoSubscriber(Plugin):
         try:
             self._db.execute(self._insert_sql, stream_name, commit = True)
         except Exception as e:
-            logging.exception(e)
+            self.logger.exception(e)
 
-        if self.client.subscribe_users([self.client.id], stream_name):
+        if self.client().subscribe_users([self.client().id], stream_name):
             try:
                 self._db.execute(self._subscribe_sql, stream_name, commit = True)
             except Exception as e:
-                logging.exception(e)
+                self.logger.exception(e)
         else:
-            logging.warning('could not subscribe to %s', stream_name)
+            self.logger.warning('could not subscribe to %s', stream_name)
 
     def _remove_stream_from_table(self, stream_name: str) -> None:
         """Remove the given stream name from the PublicStreams table."""
         try:
             self._db.execute(self._remove_sql, stream_name, commit = True)
         except Exception as e:
-            logging.exception(e)
+            self.logger.exception(e)

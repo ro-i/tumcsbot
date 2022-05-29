@@ -21,8 +21,8 @@ class UserPrivilegedTest(unittest.TestCase):
 
     def test_no_privilege(self) -> None:
         data: List[Dict[str, Any]] = [
-            {'role': -200}, {'role': 0}, {'role': 400}, {'role': 600}, {'is_admin': False},
-            {'is_admin': "False"}, {'is_admin': "True"}
+            {'role': -200}, {'role': 0}, {'role': 300}, {'role': 400}, {'role': 600},
+            {'is_admin': False}, {'is_admin': "False"}, {'is_admin': "True"}
         ]
         for d in data:
             ret: Dict[str, Any] = {'result': 'success', 'user': d}
@@ -32,7 +32,7 @@ class UserPrivilegedTest(unittest.TestCase):
 
     def test_privilege(self) -> None:
         data: List[Dict[str, Any]] = [
-            {'role': 100}, {'role': 200}, {'role': 300}, {'is_admin': True}
+            {'role': 100}, {'role': 200}, {'is_admin': True}
         ]
         for d in data:
             ret: Dict[str, Any] = {'result': 'success', 'user': d}

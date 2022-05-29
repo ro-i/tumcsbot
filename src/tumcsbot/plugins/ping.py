@@ -3,13 +3,13 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-from typing import Any, Dict, Iterable, Union
+from typing import Iterable, Union
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import Plugin
+from tumcsbot.plugin import Event, PluginThread
 
 
-class Ping(Plugin):
+class Ping(PluginThread):
     """The user pinged us. Still be nice! :)
 
     Do not react on pings in private messages that do not contain a
@@ -18,31 +18,30 @@ class Ping(Plugin):
     notifies them of the subscription (with ping) and we react on the
     messages of the Notification Bot to the users.
     """
-    plugin_name = 'ping'
-    events = ['message']
+    zulip_events = ['message']
 
-    def handle_event(
-        self,
-        event: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        return Response.build_reaction(event['message'], 'wave')
+    def _init_plugin(self) -> None:
+        # Precompute the client id.
+        self.client_id: int = self.client().id
 
-    def is_responsible(self, event: Dict[str, Any]) -> bool:
+    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
+        return Response.build_reaction(event.data['message'], 'wave')
+
+    def is_responsible(self, event: Event) -> bool:
         return (
-            event['type'] == 'message'
+            event.data['type'] == 'message'
             and (
                 (
                     # Only handle command messages if the command is empty.
-                    'command_name' in event['message']
-                    and not event['message']['command_name']
+                    'command_name' in event.data['message']
+                    and not event.data['message']['command_name']
                 )
                 or (
-                    'command_name' not in event['message']
-                    and event['message']['sender_id'] != self.client.id
-                    and 'mentioned' in event['flags']
-                    and (not event['message']['type'] == 'private'
-                         or self.client.is_only_pm_recipient(event['message']))
+                    'command_name' not in event.data['message']
+                    and event.data['message']['sender_id'] != self.client_id
+                    and 'mentioned' in event.data['flags']
+                    and (not event.data['message']['type'] == 'private'
+                         or self.client().is_only_pm_recipient(event.data['message']))
                 )
             )
         )

@@ -7,79 +7,89 @@ from inspect import cleandoc
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from tumcsbot.lib import CommandParser, Regex, Response
-from tumcsbot.plugin import CommandPlugin, PluginContext
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Move(CommandPlugin):
-    plugin_name = 'move'
+class Move(PluginCommand, PluginThread):
     syntax = cleandoc(
         """
-        move <destination stream>
-          or move -m[count] <destination topic>
+        move <destination>
+          or move -m[count] <destination>
         """
     )
     description = cleandoc(
         """
-        - `move <destination stream`:
-        Move the current topic to `destination stream` and notify the \
-        creator of the topic by a private message.
-        **Note**: This works only if the bot has access to both streams!
-        - `move -m[count] <destination topic>`:
-        Move the last `count` posts of the current topic to the given \
-        topic in the current stream. The topic will be created if it \
-        does not already exist. `count` defaults to 1.
+        - `move <destination>`:
+        Move the current topic to the `destination` and notify the \
+        creator of the topic by a private message. Change the topic \
+        name to destination topic if present, otherwise keep the \
+        topic name.
+        `destination` is parsed according to the following cases:
+          - `stream_name` → `stream_name`, no topic
+          - `#**stream_name**` → `stream_name`, no topic
+          - `#**stream_name>topic**` → `stream_name`, `topic`
+        - `move -m[count] <destination>`:
+        Same as above, but only move the last `count` messages of the \
+        current topic instead of the whole topic.
+        `count` defaults to 1.
 
         [administrator/moderator rights needed]
+
+        **Note**:
+        - This works only if the bot has access to the participating \
+        streams!
+        - This command does not work if the destination stream name \
+        contains a `>` -> an issue that needs to be fixed in the Zulip \
+        server.
         """
     )
-    msg_template_stream: str = (
-        'Hi {}, I moved your topic "{}" to stream #**{}** because I '
-        'think that it might be more appropriate there :smile:'
-    )
-    msg_template_topic: str = (
+    msg_template: str = (
         'Hi {}, I moved your post from #**{}** to #**{}** because I '
         'think that it might be more appropriate there :smile:'
     )
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
+    def _init_plugin(self) -> None:
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
-            'move', opts={'m': lambda m: int(m) if m else 1}, args={'dest': str}, greedy=True
+            self.plugin_name,
+            opts={'m': lambda m: int(m) if m else 1},
+            args={'dest': str},
+            greedy=True
         )
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
 
-        if not self.client.user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         if 'stream_id' not in message:
-            return Response.build_message(message, 'Error: Not a stream topic.')
+            return Response.build_message(message, 'Error: not in a stream.')
 
-        result = self.command_parser.parse('move ' + message['command'])
+        result = self.command_parser.parse(self.plugin_name + " " + message['command'])
         if result is None:
             return Response.command_not_found(message)
         _, opts, args = result
 
-        dest: str = ' '.join(args.dest)
+        # TODO: discards additional spaces
+        dest: Optional[Tuple[str, Optional[str]]] = Regex.get_stream_and_topic_name(
+            " ".join(args.dest)
+        )
 
-        if opts.m is not None:
-            return self._move_topic(message, dest, opts.m)
-        return self._move_stream(message, dest)
+        if dest is None:
+            return Response.build_message(message, "cannot parse " + message["command"])
 
-    def _move_topic(
+        return self._move(message, dest[0], dest[1], opts.m)
+
+    def _move(
         self,
         message: Dict[str, Any],
-        dest: str,
-        count: int
+        dest_stream: str,
+        dest_topic: Optional[str],
+        count: Optional[int]
     ) -> Union[Response, Iterable[Response]]:
-        if count < 1:
-            return Response.build_message(message, 'Error: Message count must be >= 1.')
+        if count is not None and count < 1:
+            return Response.build_message(message, 'Error: message count must be >= 1.')
 
         # Get the stream id ...
         stream_id: int = message['stream_id']
@@ -87,104 +97,56 @@ class Move(CommandPlugin):
         topic: str = message['subject']
 
         # Get the message that is count "hops" before the given message
-        # in this topic.
+        # in this topic if count is give, else the first message in the topic.
         request: Dict[str, Any] = {
-            'anchor': 'newest',
-            'num_before': count + 1,
-            'num_after': 0,
+            'anchor': 'newest' if count is not None else 'oldest',
+            'num_before': (count + 1) if count is not None else 0,
+            'num_after': 0 if count is not None else 1,
             'narrow': [
                 {'operator': 'stream', 'operand': stream_id},
-                {'operator': 'topic', 'operand': topic},
-                {'operator': 'near', 'operand': str(message['id'])}
-            ]
+                {'operator': 'topic', 'operand': topic}
+            ] + (
+                [{'operator': 'near', 'operand': str(message['id'])}]
+                if count is not None else
+                []
+            )
         }
-        result = self.client.get_messages(request)
+        result = self.client().get_messages(request)
         if result['result'] != 'success':
             return Response.error(message)
-        if len(result['messages']) < 2:
+        if ((count is not None and len(result['messages']) < 2)
+                or (count is None and len(result["messages"]) < 1)):
             return Response.build_message(message, 'No message to move.')
         first_message: Dict[str, Any] = result['messages'][0]
 
-        # Move message (and all following in the same topic) to the new topic.
-        request = {
-            'message_id': first_message['id'],
-            'topic': dest,
-            'stream_id': stream_id,
-            'send_notification_to_old_thread': False,
-            'send_notification_to_new_thread': False,
-            'propagate_mode': 'change_later'
-        }
-        result = self.client.update_message(request)
-        if result['result'] != 'success':
-            return Response.error(message)
-
-        # Remove requesting message.
-        self.client.delete_message(message['id'])
-
-        # Get current stream name.
-        stream_name: Optional[str] = self.client.get_stream_name(stream_id)
-        from_loc: str = (stream_name if stream_name is not None else "unknown") + ">" + topic
-        to_loc: str = (stream_name if stream_name is not None else "unknown") + ">" + dest
-
-        return Response.build_message(
-            first_message,
-            self.msg_template_topic.format(first_message['sender_full_name'], from_loc, to_loc),
-            msg_type = 'private'
-        )
-
-    def _move_stream(
-        self,
-        message: Dict[str, Any],
-        dest: str
-    ) -> Union[Response, Iterable[Response]]:
-        # Get destination stream name.
-        dest_stream: Optional[str] = Regex.get_stream_name(dest)
-        if dest_stream is None:
-            return Response.command_not_found(message)
-
         # Get destination stream id.
-        result: Dict[str, Any] = self.client.get_stream_id(dest_stream)
+        result = self.client().get_stream_id(dest_stream)
         if result['result'] != 'success':
             return Response.error(message)
         dest_stream_id: int = result['stream_id']
 
-        # Get the stream id ...
-        src_stream_id: int = message['stream_id']
-        # ... and the topic of the current message.
-        topic: str = message['subject']
-
-        # Get message which started the topic.
-        request: Dict[str, Any] = {
-            'anchor': 'oldest',
-            'num_before': 0,
-            'num_after': 1,
-            'narrow': [
-                { 'operator': 'stream', 'operand': src_stream_id },
-                { 'operator': 'topic', 'operand': topic }
-            ]
-        }
-        result = self.client.get_messages(request)
-        if result['result'] != 'success':
-            return Response.error(message)
-        first_message: Dict[str, Any] = result['messages'][0]
-
-        # Move message (and all following in the same topic) = move topic.
+        # Move message (and all following in the same topic) to the new topic.
         request = {
             'message_id': first_message['id'],
-            'topic': topic,
+            'topic': dest_topic if dest_topic is not None else topic,
             'stream_id': dest_stream_id,
             'send_notification_to_old_thread': False,
-            'propagate_mode': 'change_all'
+            'propagate_mode': 'change_later' if count is not None else 'change_all'
         }
-        result = self.client.update_message(request)
+        result = self.client().update_message(request)
         if result['result'] != 'success':
             return Response.error(message)
 
         # Remove requesting message.
-        self.client.delete_message(message['id'])
+        self.client().delete_message(message['id'])
+
+        # Get current stream name.
+        stream_name: Optional[str] = self.client().get_stream_name(stream_id)
+        from_loc: str = (stream_name if stream_name is not None else "unknown") + ">" + topic
+        to_loc: str = dest_stream + ">" + (dest_topic if dest_topic is not None else topic)
 
         return Response.build_message(
             first_message,
-            self.msg_template_stream.format(first_message['sender_full_name'], topic, dest_stream),
+            self.msg_template.format(first_message['sender_full_name'], from_loc, to_loc),
             msg_type = 'private'
         )

@@ -46,7 +46,6 @@ def main() -> None:
     bot: TumCSBot = TumCSBot(
         zuliprc = args.zuliprc[0],
         db_path = args.db_path[0],
-        max_workers = args.threads,
         debug = args.debug,
         logfile = args.logfile
     )

@@ -12,19 +12,17 @@ its database table.
 import re
 
 from random import randint
-from typing import Any, Dict, Iterable, List, Pattern, Tuple, Union
+from typing import Iterable, List, Pattern, Tuple, Union
 
 from tumcsbot.lib import DB, Response
-from tumcsbot.plugin import PluginContext, SubBotPlugin
+from tumcsbot.plugin import Event, PluginProcess
 
 
-class AlertWordDaemon(SubBotPlugin):
-    plugin_name = 'alert_word_daemon'
-    events = ['message']
+class AlertWordDaemon(PluginProcess):
+    zulip_events = ['message']
     _select_sql: str = 'select Phrase, Emoji from Alerts'
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
+    def _init_plugin(self) -> None:
         # Get pattern and the alert_phrase - emoji bindings.
         self._bindings: List[Tuple[Pattern[str], str]] = self._get_bindings()
         # Replace markdown links by their textual representation.
@@ -32,27 +30,24 @@ class AlertWordDaemon(SubBotPlugin):
 
     def _get_bindings(self) -> List[Tuple[Pattern[str], str]]:
         """Compile the regexes and bind them to their emojis."""
-
         # Get a database connection.
-        self._db = DB()
+        db: DB = DB()
 
         bindings: List[Tuple[Pattern[str], str]] = []
 
         # Verify every regex and only use the valid ones.
-        for regex, emoji in self._db.execute(self._select_sql):
+        for regex, emoji in db.execute(self._select_sql):
             try:
                 pattern: Pattern[str] = re.compile(regex)
             except re.error:
                 continue
             bindings.append((pattern, emoji))
 
+        db.close()
+
         return bindings
 
-    def handle_event(
-        self,
-        event: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
         if not self._bindings:
             return Response.none()
 
@@ -60,19 +55,23 @@ class AlertWordDaemon(SubBotPlugin):
         # Replace markdown links by their textual representation.
         # Convert to lowercase.
         content: str = self._markdown_links\
-            .sub(r'\1', event['message']['content'])\
+            .sub(r'\1', event.data['message']['content'])\
             .lower()
 
         return [
-            Response.build_reaction(message = event['message'], emoji = emoji)
+            Response.build_reaction(message = event.data['message'], emoji = emoji)
             for pattern, emoji in self._bindings
             if randint(1, 6) == 3 and pattern.search(content) is not None
         ]
 
-    def is_responsible(self, event: Dict[str, Any]) -> bool:
+    def is_responsible(self, event: Event) -> bool:
         # Do not react on own messages or on private messages where we
         # are not the only recipient.
-        return (event['type'] == 'message'
-                and event['message']['sender_id'] != self.client.id
-                and (event['message']['type'] == 'stream'
-                     or self.client.is_only_pm_recipient(event['message'])))
+        return (
+            event.data['type'] == 'message'
+            and event.data['message']['sender_id'] != self.client().id
+            and (
+                event.data['message']['type'] == 'stream'
+                or self.client().is_only_pm_recipient(event.data['message'])
+            )
+        )

@@ -4,16 +4,20 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
 
-from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginContext, CommandPlugin
+from tumcsbot.lib import DB, Response, get_classes_from_path
+from tumcsbot.plugin import PluginCommand, _Plugin, PluginThread
 
 
-class Help(CommandPlugin):
+class Help(PluginCommand, PluginThread):
     """Provide a help command plugin."""
 
-    plugin_name = 'help'
+    # This plugin depends on all the others because it needs their db entries.
+    dependencies = PluginCommand.dependencies + [
+        cast(str, plugin_class.plugin_name)
+        for plugin_class in get_classes_from_path("tumcsbot.plugins", _Plugin) # type: ignore
+    ]
     syntax = 'help'
     description = 'Post a help message to the requesting user.'
     _help_overview_template: str = cleandoc(
@@ -35,18 +39,13 @@ class Help(CommandPlugin):
         Have a nice day! :-)
         """
     )
+    _get_usage_all_sql: str = "select name, syntax, description from Plugins"
+    _get_usage_name_sql: str = "select name, syntax, description from Plugins where name = ?"
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
-        self.help_info: List[Tuple[str, str, str]] = self._get_help_info(
-            plugin_context.command_plugin_classes
-        )
+    def _init_plugin(self) -> None:
+        self.help_info: List[Tuple[str, str, str]] = self._get_help_info()
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         command: str = message['command'].strip()
         if not command:
             return self._help_overview(message)
@@ -64,25 +63,21 @@ class Help(CommandPlugin):
         """Format the syntax string of a command."""
         return '```text\n' + syntax.strip() + '\n```\n'
 
-    def _get_help_info(
-        self,
-        commands: List[Type[CommandPlugin]]
-    ) -> List[Tuple[str, str, str]]:
+    def _get_help_info(self) -> List[Tuple[str, str, str]]:
         """Get help information from each command.
 
         Return a list of tuples (command name, syntax, description).
         """
-        result: List[Tuple[str, str, str]] = []
-
-        for command in commands:
-            name: str = command.plugin_name
-            syntax_data, description_data = command.get_usage()
-            syntax: str = self._format_syntax(syntax_data)
-            description: str = self._format_description(description_data)
-            result.append((name, syntax, description))
-
+        db: DB = DB()
+        result_sql: List[Tuple[Any, ...]] = db.execute(self._get_usage_all_sql)
+        db.close()
+        result: List[Tuple[str, str, str]] = [
+            (name, self._format_syntax(syntax), self._format_description(description))
+            for name, syntax, description in result_sql
+            if syntax is not None and description is not None
+        ]
         # Sort by name.
-        return sorted(result, key = lambda tuple: tuple[0])
+        return sorted(result, key=lambda tuple: tuple[0])
 
     def _help_command(
         self,

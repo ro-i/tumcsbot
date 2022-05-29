@@ -3,17 +3,14 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import logging
-
 from inspect import cleandoc
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from tumcsbot.lib import split, Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class RenameStreams(CommandPlugin):
-    plugin_name = 'rename_streams'
+class RenameStreams(PluginCommand, PluginThread):
     syntax = 'rename_streams <stream_name_old>,<stream_name_new>...'
     description = cleandoc(
         """
@@ -24,12 +21,8 @@ class RenameStreams(CommandPlugin):
         """
     )
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         failed: List[str] = []
@@ -45,13 +38,13 @@ class RenameStreams(CommandPlugin):
             line: str = f'{old} -> {new}'
 
             try:
-                old_id: int = self.client.get_stream_id(old)['stream_id']
+                old_id: int = self.client().get_stream_id(old)['stream_id']
             except Exception as e:
-                logging.exception(e)
+                self.logger.exception(e)
                 failed.append(line)
                 continue
 
-            result: Dict[str, Any] = self.client.update_stream(
+            result: Dict[str, Any] = self.client().update_stream(
                 {'stream_id': old_id, 'new_name': '"{}"'.format(new)}
             )
             if result['result'] != 'success':

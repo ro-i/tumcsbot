@@ -38,6 +38,16 @@ class RegexTest(unittest.TestCase):
         for (string, stream_name) in self.stream_names:
             self.assertEqual(Regex.get_stream_name(string), stream_name)
 
+    def test_stream_and_topic_names(self) -> None:
+        self.assertIsNone(Regex.get_stream_and_topic_name(""))
+        self.assertEqual(Regex.get_stream_and_topic_name("abc"), ("abc", None))
+        self.assertEqual(Regex.get_stream_and_topic_name("#**abc**"), ("abc", None))
+        self.assertEqual(Regex.get_stream_and_topic_name("#**abc>def**"), ("abc", "def"))
+        self.assertEqual(Regex.get_stream_and_topic_name("#**abc>def>ghi**"), ("abc", "def>ghi"))
+        self.assertEqual(Regex.get_stream_and_topic_name("#**>**"), (">", None)) # sadly, those are possible...
+        self.assertEqual(Regex.get_stream_and_topic_name("#**>a**"), (">a", None))
+        self.assertEqual(Regex.get_stream_and_topic_name("#**a>**"), ("a>", None))
+
     def test_user_names(self) -> None:
         for (string, user_name) in self.user_names:
             self.assertEqual(Regex.get_user_name(string), user_name)

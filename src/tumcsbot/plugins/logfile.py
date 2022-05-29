@@ -4,24 +4,18 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 import logging
-
 from typing import Any, Dict, Iterable, List, Union
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Logfile(CommandPlugin):
-    plugin_name = 'logfile'
+class Logfile(PluginCommand, PluginThread):
     syntax = 'logfile'
     description = 'Get the bot\'s own logfile.\n[administrator/moderator rights needed]'
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         handlers: List[logging.Handler] = logging.getLogger().handlers
@@ -33,7 +27,7 @@ class Logfile(CommandPlugin):
 
         # Upload the logfile. (see https://zulip.com/api/upload-file)
         with open(handlers[0].baseFilename, 'rb') as lf:
-            result: Dict[str, Any] = self.client.call_endpoint(
+            result: Dict[str, Any] = self.client().call_endpoint(
                 'user_uploads', method = 'POST', files = [lf]
             )
 

@@ -10,6 +10,11 @@ _command_exists_or_exit () {
 	fi
 }
 
+_enter_venv () {
+        # enter virtual environment
+        . "${dest_dir}/venv/bin/activate"
+}
+
 clean_func () {
 	# remove virtual environment
 	rm -rf "${dest_dir}/venv"
@@ -32,13 +37,12 @@ migrations_func () {
 }
 
 mypy_func () {
-	_command_exists_or_exit mypy
+	_enter_venv
 	mypy --strict "${dest_dir}/src"
 }
 
 run_func () {
-	# enter virtual environment
-	. "${dest_dir}/venv/bin/activate"
+        _enter_venv
 
 	upgrade_requirements_func
 
@@ -47,24 +51,21 @@ run_func () {
 }
 
 static_analysis_func () {
-	_command_exists_or_exit pylint
+	_enter_venv
 	# Disable some checks.
 	pylint --overgeneral-exceptions=BaseException \
 		--min-similarity-lines=100 \
 		--no-docstring-rgx='.*' \
 		--good-names-rgxs='[a-z],[a-z][a-z]' \
-		--disable=C0114,W0702 \
+		--disable=C0103,C0114,W0201,W0702 \
 		--exit-zero \
 		"${dest_dir}/src"
 	mypy_func
 }
 
 test_func () {
-	# enter virtual environment
-	. "${dest_dir}/venv/bin/activate"
-
-	# execute tests
-	exec python3 -m unittest discover --start-directory "${dest_dir}/src"
+	_enter_venv
+	pytest
 }
 
 upgrade_requirements_func () {
@@ -76,14 +77,10 @@ virtualenv_func () {
 	# create virtual environment
 	python3 -m venv "${dest_dir}/venv"
 
-	# enter virtual environment
-	. "${dest_dir}/venv/bin/activate"
+        _enter_venv
 
 	# install dependecies
 	pip3 install -r "${dest_dir}/requirements.txt"
-
-	# exit virtual environment
-	deactivate
 
 	printf '\n\n%s\n\n' '########################################'
 	printf '%s' 'TODO for you: Please install the zuliprc for this bot.'

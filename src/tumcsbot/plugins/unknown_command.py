@@ -3,37 +3,31 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-from typing import Any, Dict, Iterable, List, Union
+from typing import Final, Iterable, Union, cast
 
-from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginContext, Plugin
+from tumcsbot.lib import DB, Response
+from tumcsbot.plugin import Event, PluginThread
 
 
-class UnknownCommand(Plugin):
+class UnknownCommand(PluginThread):
     """Handle unknown commands."""
-    plugin_name = 'unknown_command'
-    events = ['message']
+    zulip_events = ['message']
+    _select_sql: Final[str] = "select name from Plugins"
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
-        self._command_names: List[str] = list(map(
-            lambda p: p.plugin_name,
-            plugin_context.command_plugin_classes
+    def _init_plugin(self) -> None:
+        self._command_names: Iterable[str] = list(map(
+            lambda t: cast(str, t[0]), DB(read_only=True).execute(self._select_sql)
         ))
 
-    def handle_event(
-        self,
-        event: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
-        return Response.build_reaction(event['message'], 'question')
+    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
+        return Response.build_reaction(event.data['message'], 'question')
 
-    def is_responsible(self, event: Dict[str, Any]) -> bool:
+    def is_responsible(self, event: Event) -> bool:
         return (
-            event['type'] == 'message'
+            event.data['type'] == 'message'
             and (
-                'command_name' in event['message']
-                and event['message']['command_name']
-                and event['message']['command_name'] not in self._command_names
+                'command_name' in event.data['message']
+                and event.data['message']['command_name']
+                and event.data['message']['command_name'] not in self._command_names
             )
         )

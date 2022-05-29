@@ -7,11 +7,10 @@ from inspect import cleandoc
 from typing import cast, Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from tumcsbot.lib import CommandParser, Regex, Response
-from tumcsbot.plugin import PluginContext, CommandPlugin
+from tumcsbot.plugin import PluginCommand, PluginThread
 
 
-class Subscribe(CommandPlugin):
-    plugin_name = 'subscribe'
+class Subscribe(PluginCommand, PluginThread):
     syntax = cleandoc(
         """
         subscribe streams <destination_stream_name> <stream_name>...
@@ -64,8 +63,7 @@ class Subscribe(CommandPlugin):
         """
     )
 
-    def __init__(self, plugin_context: PluginContext) -> None:
-        super().__init__(plugin_context)
+    def _init_plugin(self) -> None:
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
             'streams', args={
@@ -88,11 +86,7 @@ class Subscribe(CommandPlugin):
         )
         self.command_parser.add_subcommand('all_users', args={'dest_stream': Regex.get_stream_name})
 
-    def handle_message(
-        self,
-        message: Dict[str, Any],
-        **kwargs: Any
-    ) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
         result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
 
         result = self.command_parser.parse(message['command'])
@@ -116,15 +110,15 @@ class Subscribe(CommandPlugin):
         message: Dict[str, Any],
         dest_stream: str,
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
-        result: Dict[str, Any] = self.client.get_users()
+        result: Dict[str, Any] = self.client().get_users()
         if result['result'] != 'success':
             return Response.error(message)
         user_ids: List[int] = [ user['user_id'] for user in result['members'] ]
 
-        if not self.client.subscribe_users(user_ids, dest_stream):
+        if not self.client().subscribe_users(user_ids, dest_stream):
             return Response.error(message)
 
         return Response.ok(message)
@@ -135,13 +129,13 @@ class Subscribe(CommandPlugin):
         dest_stream: str,
         streams: List[str]
     ) -> Union[Response, Iterable[Response]]:
-        if not self.client.user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message['sender_id']):
             return Response.admin_err(message)
 
         failed: List[str] = []
 
         for stream in streams:
-            if not self.client.subscribe_all_from_stream_to_stream(stream, dest_stream, None):
+            if not self.client().subscribe_all_from_stream_to_stream(stream, dest_stream, None):
                 failed.append(stream)
 
         if not failed:
@@ -157,11 +151,11 @@ class Subscribe(CommandPlugin):
         dest_stream: str,
         user_emails: List[str]
     ) -> Union[Response, Iterable[Response]]:
-        user_ids: Optional[List[int]] = self.client.get_user_ids_from_emails(user_emails)
+        user_ids: Optional[List[int]] = self.client().get_user_ids_from_emails(user_emails)
         if user_ids is None:
             return Response.build_message(message, 'error: could not get the user ids.')
 
-        if not self.client.subscribe_users(user_ids, dest_stream, allow_private_streams=True):
+        if not self.client().subscribe_users(user_ids, dest_stream, allow_private_streams=True):
             return Response.error(message)
 
         return Response.ok(message)
@@ -173,7 +167,7 @@ class Subscribe(CommandPlugin):
         users: List[Union[str, Tuple[str, Optional[int]]]]
     ) -> Union[Response, Iterable[Response]]:
         # First, get all the ids of the users whose ids we do not already know.
-        user_ids: Optional[List[int]] = self.client.get_user_ids_from_display_names(map(
+        user_ids: Optional[List[int]] = self.client().get_user_ids_from_display_names(map(
             lambda o: o[0] if isinstance(o, tuple) else o,
             filter(
                 lambda o: isinstance(o, str) or (isinstance(o, tuple) and o[1] is None), users
@@ -187,7 +181,7 @@ class Subscribe(CommandPlugin):
             filter(lambda o: isinstance(o, tuple) and isinstance(o[1], int), users)
         ))
 
-        if not self.client.subscribe_users(user_ids, dest_stream):
+        if not self.client().subscribe_users(user_ids, dest_stream):
             return Response.error(message)
 
         return Response.ok(message)
