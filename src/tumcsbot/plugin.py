@@ -133,8 +133,6 @@ class _Plugin(ABC):
     # List of Zulip events this plugin is responsible for.
     # See https://zulip.com/api/get-events.
     zulip_events: list[str] = []
-    # Whether this plugin can be scheduled automatically.
-    schedulable: bool = False
     # Limit the size of the incoming queues.
     QUEUE_LIMIT_SIZE: int = 4096
     # Update the sql entry of the plugin.

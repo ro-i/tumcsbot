@@ -11,7 +11,6 @@ from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
 class CreateStreams(PluginCommandMixin, PluginThread):
-    schedulable = True
     syntax = "create_streams <stream_name>,<stream_description>..."
     description = cleandoc(
         """
