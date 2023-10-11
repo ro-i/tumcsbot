@@ -1,0 +1,16 @@
+services:
+  tumcsbot:
+    build:
+      context: .
+    command:
+      - /bin/sh
+      - -c
+      - |
+        make init
+        make debug
+    volumes:
+      - type: bind
+        source: .
+        target: /code
+      - /code/venv
+    working_dir: /code

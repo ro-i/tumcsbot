@@ -28,13 +28,20 @@ In order to grant those rights, run
 in the appropriate directory of your zulip server installation.
 
 
+usage (docker)
+--------------
+
+- `docker compose up`: run tumcsbot
+- `docker compose -f docker-compose.debug.yml up`: run tumcsbot in debug mode
+
+
 usage
 -----
 
-- `make init` will create the database `tumcsbot.db` and install a virtual
-  environment into `venv`.
-- `make run` lets you run the bot.
-- `make debug` runs the bot with debug logging enabled.
+- `make init`: create the database `tumcsbot.db` and install a virtual
+  environment into `venv`
+- `make run`: run tumcsbot
+- `make debug`: run tumcsbot in debug mode
 
 You can also run the bot manually:
 ```

@@ -21,28 +21,11 @@ import logging
 import multiprocessing
 import queue
 from abc import ABC, abstractmethod
-from functools import wraps as functools_wraps
-from threading import Lock, Thread
-from typing import (
-    Any, Callable, Dict, Final, Iterable, List, Optional, Set, Tuple, Type, Union, cast, final
-)
+from threading import Thread
+from typing import Any, Callable, Final, Iterable, Type, cast, final
 
 from tumcsbot.client import Client
 from tumcsbot.lib import DB, LOGGING_FORMAT, Response, StrEnum
-
-
-# Own decorator to guarantee correct client access for _Plugin.client.
-# See https://wrapt.readthedocs.io/en/latest/examples.html\
-# ?highlight=synchronized#thread-synchronization
-def synchronize_client(func: Callable[["_Plugin"], Client]) -> Callable[["_Plugin"], Client]:
-    @functools_wraps(func)
-    def wrapper(plugin_instance: "_Plugin") -> Client:
-        if plugin_instance._need_client_lock:
-            with plugin_instance.plugin_context.global_client_lock:
-                return func(plugin_instance)
-        else:
-            return func(plugin_instance)
-    return wrapper
 
 
 @final
@@ -75,23 +58,25 @@ class Event:
         sender: str,
         type: EventType,
         data: Any = None,
-        dest: Optional[str] = None,
-        reply_to: Optional[str] = None,
+        dest: str | None = None,
+        reply_to: str | None = None,
     ) -> None:
         self.sender: str = sender
         self.type: EventType = type
         self.data: Any = data
-        self.dest: Optional[str] = dest
+        self.dest: str | None = dest
         self.reply_to: str = reply_to if reply_to is not None else sender
 
     def __repr__(self) -> str:
-        return json.dumps({
-            "sender": self.sender,
-            "type": self.type,
-            "data": str(self.data),
-            "dest": self.dest,
-            "reply_to": self.reply_to
-        })
+        return json.dumps(
+            {
+                "sender": self.sender,
+                "type": self.type,
+                "data": str(self.data),
+                "dest": self.dest,
+                "reply_to": self.reply_to,
+            }
+        )
 
     @classmethod
     def reload_event(cls, sender: str, dest: str) -> "Event":
@@ -113,26 +98,17 @@ class PluginContext:
     push_loopback  Method to push an event to the central event queue of
                    the bot.
     logging_level  The logging level to be used.
-    global_client_lock
-                   A thread lock to be used to access the globally
-                   shared client instance.
-                   Must not be used by PluginProcess plugins!
     """
+
     def __init__(
         self,
         zuliprc: str,
         push_loopback: Callable[[Event], None],
         logging_level: Any,
-        global_client_lock: Lock
     ) -> None:
         self._zuliprc: Final[str] = zuliprc
         self._push_loopback: Final[Callable[[Event], None]] = push_loopback
         self._logging_level: Final[Any] = logging_level
-        self._global_client_lock: Final[Lock] = global_client_lock
-
-    @property
-    def global_client_lock(self) -> Lock:
-        return self._global_client_lock
 
     @property
     def logging_level(self) -> Any:
@@ -151,12 +127,12 @@ class _Plugin(ABC):
     """Abstract base class for every plugin."""
 
     # List of plugins which have to be loaded before this plugin.
-    dependencies: List[str] = []
+    dependencies: list[str] = []
     # List of events this plugin is responsible for.
-    events: List[EventType] = [EventType.RELOAD, EventType.STOP, EventType.ZULIP]
+    events: list[EventType] = [EventType.RELOAD, EventType.STOP, EventType.ZULIP]
     # List of Zulip events this plugin is responsible for.
     # See https://zulip.com/api/get-events.
-    zulip_events: List[str] = []
+    zulip_events: list[str] = []
     # Whether this plugin can be scheduled automatically.
     schedulable: bool = False
     # Limit the size of the incoming queues.
@@ -164,32 +140,31 @@ class _Plugin(ABC):
     # Update the sql entry of the plugin.
     _update_plugin_sql: Final[str] = "replace into Plugins values (?,?,?)"
 
-    def __init__(self, client: Client, plugin_context: PluginContext) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         # Some declarations.
-        self._worker: Union[Thread, multiprocessing.Process]
-        self.queue: Union["queue.Queue[Event]", "multiprocessing.Queue[Event]"]
+        self._worker: Thread | multiprocessing.Process
+        self.queue: "queue.Queue[Event] | multiprocessing.Queue[Event]"
 
         self.plugin_context: PluginContext = plugin_context
         # Get own logger.
         self.logger: logging.Logger = self.create_logger()
-        self.logger.handlers[0].setFormatter(fmt = logging.Formatter(LOGGING_FORMAT))
+        self.logger.handlers[0].setFormatter(fmt=logging.Formatter(LOGGING_FORMAT))
         self.logger.setLevel(plugin_context.logging_level)
         # Set the running flag.
         self.running: bool = True
         # Set the default timeout to block the queue. (default: infinity)
-        self.queue_timeout: Optional[float] = None
+        self.queue_timeout: float | None = None
         # Queue for incoming events.
         self.queue = self.create_queue()
-        # Maybe create own client instance in _init_plugin, overwriting this
-        # assignment and setting "_need_client_lock" to False.
-        self._client: Client = client
-        self._need_client_lock: bool = True
+
+        self._client: Client = Client(config_file=plugin_context.zuliprc)
+
         # Initialize database entry for this plugin.
         self._init_db()
 
     def _init_db(self) -> None:
         db: DB = DB()
-        db.execute(self._update_plugin_sql, self.plugin_name, None, None, commit=True)
+        db.execute(self._update_plugin_sql, self.plugin_name(), None, None, commit=True)
         db.close()
 
     def _init_plugin(self) -> None:
@@ -197,18 +172,16 @@ class _Plugin(ABC):
 
     @final
     @classmethod
-    @property
     def plugin_name(cls) -> str:
         """Do not override!"""
-        return cls.__module__.rsplit('.', maxsplit=1)[-1]
+        return cls.__module__.rsplit(".", maxsplit=1)[-1]
 
     @final
-    @synchronize_client
     def client(self) -> Client:
         """Get the client object for this plugin.
 
         Return either the plugin's own client object or the globally
-        shared client object using the global client lock.
+        shared client object.
         """
         return self._client
 
@@ -221,11 +194,13 @@ class _Plugin(ABC):
         """Create a logger instance suitable for this plugin type."""
 
     @abstractmethod
-    def create_queue(self) -> Union["queue.Queue[Event]", "multiprocessing.Queue[Event]"]:
+    def create_queue(
+        self,
+    ) -> "queue.Queue[Event] | multiprocessing.Queue[Event]":
         """Create a queue instance suitable for this plugin type."""
 
     @abstractmethod
-    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
+    def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
         """Process a Zulip event.
 
         Process the given event and return a Response or an Iterable
@@ -241,7 +216,7 @@ class _Plugin(ABC):
         if event.type == EventType.ZULIP:
             if not self.is_responsible(event):
                 return
-            responses: Union[Response, Iterable[Response]] = self.handle_zulip_event(event)
+            responses: Response | Iterable[Response] = self.handle_zulip_event(event)
             self.client().send_responses(responses)
         elif event.type == EventType.STOP:
             self.stop()
@@ -332,22 +307,22 @@ class PluginThread(_Plugin):
     """Base class for plugins that live in a separate thread."""
 
     @final
-    def __init__(self, client: Client, plugin_context: PluginContext) -> None:
-        _Plugin.__init__(self, client, plugin_context)
+    def __init__(self, plugin_context: PluginContext) -> None:
+        _Plugin.__init__(self, plugin_context)
         # The 'daemon'-Argument ensures that threads get
         # terminated when the parent process terminates.
-        self._worker = Thread(target=self.run, name=self.plugin_name, daemon=True)
+        self._worker = Thread(target=self.run, name=self.plugin_name(), daemon=True)
 
     @final
     def clear_queues(self) -> None:
-        self.queue.queue.clear()
+        cast("queue.Queue[Event]", self.queue).queue.clear()
 
     @final
     def create_logger(self) -> logging.Logger:
         return logging.getLogger()
 
     @final
-    def create_queue(self) -> Union["queue.Queue[Event]", "multiprocessing.Queue[Event]"]:
+    def create_queue(self) -> "queue.Queue[Event]":
         return queue.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
 
 
@@ -355,21 +330,20 @@ class PluginProcess(_Plugin):
     """Base class for plugins that live in a separate process."""
 
     @final
-    def __init__(self, client: Client, plugin_context: PluginContext) -> None:
-        _Plugin.__init__(self, client, plugin_context)
-        # We absolutely need an own client instance here.
-        # The global client lock is only suitable for threads!
-        self._client = Client(config_file=self.plugin_context.zuliprc)
-        self._need_client_lock = False
+    def __init__(self, plugin_context: PluginContext) -> None:
+        _Plugin.__init__(self, plugin_context)
         # The 'daemon'-Argument ensures that subprocesses get
         # terminated when the parent process terminates.
-        self._worker = multiprocessing.Process(target=self.run, name=self.plugin_name, daemon=True)
+        self._worker = multiprocessing.Process(
+            target=self.run, name=self.plugin_name(), daemon=True
+        )
 
     @final
     def clear_queues(self) -> None:
-        def clear_queue(q: "multiprocessing.Queue[Event]") -> None:
-            while not q.empty():
-                q.get_nowait()
+        def clear_queue(queue: "multiprocessing.Queue[Event]") -> None:
+            while not queue.empty():
+                queue.get_nowait()
+
         clear_queue(cast("multiprocessing.Queue[Event]", self.queue))
 
     @final
@@ -377,11 +351,11 @@ class PluginProcess(_Plugin):
         return multiprocessing.log_to_stderr()
 
     @final
-    def create_queue(self) -> Union["queue.Queue[Event]", "multiprocessing.Queue[Event]"]:
+    def create_queue(self) -> "multiprocessing.Queue[Event]":
         return multiprocessing.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
 
 
-class PluginCommand(_Plugin):
+class PluginCommandMixin(_Plugin):
     """Base class tailored for interactive commands.
 
     This class is intendet to be inherited form **in addition** one of
@@ -396,7 +370,6 @@ class PluginCommand(_Plugin):
     # The events this command would like to receive, defaults to
     # messages.
     zulip_events = _Plugin.zulip_events + ["message"]
-    # Add "get_usage" the events.
     events = _Plugin.events + [EventType.GET_USAGE]
 
     @final
@@ -406,7 +379,7 @@ class PluginCommand(_Plugin):
         db.close()
 
     @final
-    def get_usage(self) -> Tuple[str, str, str]:
+    def get_usage(self) -> tuple[str, str, str]:
         """Get own documentation to help users use this command.
 
         Return a tuple containing:
@@ -421,31 +394,33 @@ class PluginCommand(_Plugin):
         The syntax string is formatted as code (using backticks)
         automatically.
         """
-        return (self.plugin_name, self.syntax, self.description)
+        return (self.plugin_name(), self.syntax, self.description)
 
     @abstractmethod
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         """Process message.
 
         Process the given message and return a Response or an Iterable
         consisting of Response objects.
         """
 
-    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
+    def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
         """Defaults to assume event to be a message event.
 
         Overwrite if necessary!
         """
-        return self.handle_message(event.data['message'])
+        return self.handle_message(event.data["message"])
 
     def handle_event(self, event: Event) -> None:
         if event.type == EventType.GET_USAGE:
-            self.plugin_context.push_loopback(Event(
-                sender=self.plugin_name,
-                type=EventType.RET_USAGE,
-                data=self.get_usage(),
-                dest=event.reply_to
-            ))
+            self.plugin_context.push_loopback(
+                Event(
+                    sender=self.plugin_name(),
+                    type=EventType.RET_USAGE,
+                    data=self.get_usage(),
+                    dest=event.reply_to,
+                )
+            )
         else:
             super().handle_event(event)
 
@@ -458,19 +433,19 @@ class PluginCommand(_Plugin):
             super().is_responsible(event)
             and "message" in event.data
             and "command_name" in event.data["message"]
-            and event.data["message"]["command_name"] == self.plugin_name
+            and event.data["message"]["command_name"] == self.plugin_name()
         )
 
 
 def get_zulip_events_from_plugins(
-    plugins: Union[Iterable[_Plugin], Iterable[Type[_Plugin]]]
-) -> List[str]:
+    plugins: Iterable[_Plugin] | Iterable[Type[_Plugin]],
+) -> list[str]:
     """Get all Zulip events to listen to from the plugins.
 
     Every plugin decides on its own which events it likes to receive.
     The plugins passed to this function may be classes or instances.
     """
-    events: Set[str] = set()
+    events: set[str] = set()
     for plugin in plugins:
         events.update(plugin.zulip_events)
     return list(events)

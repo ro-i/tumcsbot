@@ -7,25 +7,25 @@ import os
 import subprocess as sp
 from inspect import cleandoc
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class Update(PluginCommand, PluginThread):
-    syntax = 'update'
+class Update(PluginCommandMixin, PluginThread):
+    syntax = "update"
     description = cleandoc(
         """
         Update the bot. You may want to restart it afterwards.
         [administrator/moderator rights needed]
         """
     )
-    _git_pull_cmd: List[str] = ['git', 'pull']
+    _git_pull_cmd: list[str] = ["git", "pull"]
     _timeout: int = 15
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        if not self.client().user_is_privileged(message['sender_id']):
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        if not self.client().user_is_privileged(message["sender_id"]):
             return Response.admin_err(message)
 
         # Get the dirname of this file (which is located in the git repo).
@@ -37,21 +37,25 @@ class Update(PluginCommand, PluginThread):
             self.logger.exception(e)
             return Response.build_message(
                 message,
-                f'Cannot access the directory of my git repo {git_dir}. Please contact the admin.'
+                f"Cannot access the directory of my git repo {git_dir}. Please contact the admin.",
             )
 
         # Execute command and capture stdout and stderr into one stream (stdout).
         try:
             result: sp.CompletedProcess[Any] = sp.run(
-                self._git_pull_cmd, stdout = sp.PIPE, stderr = sp.STDOUT,
-                text = True, timeout = self._timeout,
+                self._git_pull_cmd,
+                stdout=sp.PIPE,
+                stderr=sp.STDOUT,
+                text=True,
+                timeout=self._timeout,
             )
         except sp.TimeoutExpired:
             return Response.build_message(
-                message, f'{self._git_pull_cmd} failed: timeout ({self._timeout} seconds) expired'
+                message,
+                f"{self._git_pull_cmd} failed: timeout ({self._timeout} seconds) expired",
             )
 
         return Response.build_message(
             message,
-            f'Return code: {result.returncode}\nOutput:\n```text\n{result.stdout}\n```'
+            f"Return code: {result.returncode}\nOutput:\n```text\n{result.stdout}\n```",
         )

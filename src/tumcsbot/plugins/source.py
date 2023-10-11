@@ -3,17 +3,15 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-from typing import Any, Dict, Iterable, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class Source(PluginCommand, PluginThread):
-    syntax = 'source'
-    description = 'Post the link to the repository of my source code.'
+class Source(PluginCommandMixin, PluginThread):
+    syntax = "source"
+    description = "Post the link to the repository of my source code."
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        return Response.build_message(
-            message, 'https://github.com/ro-i/tumcsbot'
-        )
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        return Response.build_message(message, "https://github.com/ro-i/tumcsbot")

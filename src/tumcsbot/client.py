@@ -9,7 +9,7 @@ import logging
 import re
 import time
 from collections.abc import Iterable as IterableClass
-from typing import cast, Any, Callable, Dict, IO, Iterable, List, Pattern, Optional, Set, Union
+from typing import cast, Any, Callable, IO, Iterable
 
 from zulip import Client as ZulipClient
 
@@ -44,50 +44,55 @@ class Client(ZulipClient):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Override the constructor of the parent class."""
         super().__init__(*args, **kwargs)
-        self.id: int = self.get_profile()['user_id']
-        self.ping: str = '@**{}**'.format(self.get_profile()['full_name'])
+        self.id: int = self.get_profile()["user_id"]
+        self.ping: str = "@**{}**".format(self.get_profile()["full_name"])
         self.ping_len: int = len(self.ping)
-        self.register_params: Dict[str, Any] = {}
+        self.register_params: dict[str, Any] = {}
         self._db: DB = DB()
         self._db.checkout_table(
-            'PublicStreams', '(StreamName text primary key, Subscribed integer not null)'
+            "PublicStreams",
+            "(StreamName text primary key, Subscribed integer not null)",
         )
 
     def call_endpoint(
         self,
-        url: Optional[str] = None,
+        url: str | None = None,
         method: str = "POST",
-        request: Optional[Dict[str, Any]] = None,
+        request: dict[str, Any] | None = None,
         longpolling: bool = False,
-        files: Optional[List[IO[Any]]] = None,
-        timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+        files: list[IO[Any]] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Override zulip.Client.call_on_each_event.
 
         This is the backend for almost all API-user facing methods.
         Automatically resend requests if they failed because of the
         API rate limit.
         """
-        result: Dict[str, Any]
+        result: dict[str, Any]
 
         while True:
-            result = super().call_endpoint(url, method, request, longpolling, files, timeout)
-            if not (result['result'] == 'error'
-                    and 'code' in result
-                    and result['code'] == 'RATE_LIMIT_HIT'):
+            result = super().call_endpoint(
+                url, method, request, longpolling, files, timeout
+            )
+            if not (
+                result["result"] == "error"
+                and "code" in result
+                and result["code"] == "RATE_LIMIT_HIT"
+            ):
                 break
-            secs: float = result['retry-after'] if 'retry-after' in result else 1
-            logging.warning('hit API rate limit, waiting for %f seconds...', secs)
+            secs: float = result["retry-after"] if "retry-after" in result else 1
+            logging.warning("hit API rate limit, waiting for %f seconds...", secs)
             time.sleep(secs)
 
         return result
 
     def call_on_each_event(
         self,
-        callback: Callable[[Dict[str, Any]], None],
-        event_types: Optional[List[str]] = None,
-        narrow: Optional[List[List[str]]] = None,
-        **kwargs: Any
+        callback: Callable[[dict[str, Any]], None],
+        event_types: list[str] | None = None,
+        narrow: list[list[str]] | None = None,
+        **kwargs: Any,
     ) -> None:
         """Override zulip.Client.call_on_each_event.
 
@@ -98,50 +103,55 @@ class Client(ZulipClient):
         self.register_params = kwargs
         super().call_on_each_event(callback, event_types, narrow)
 
-    def get_messages(self, message_filters: Dict[str, Any]) -> Dict[str, Any]:
+    def get_messages(self, message_filters: dict[str, Any]) -> dict[str, Any]:
         """Override zulip.Client.get_messages.
 
         Defaults to 'apply_markdown' = False.
         """
-        message_filters['apply_markdown'] = False
+        message_filters["apply_markdown"] = False
         return super().get_messages(message_filters)
 
-    def get_public_stream_names(self, use_db: bool = True) -> List[str]:
+    def get_public_stream_names(self, use_db: bool = True) -> list[str]:
         """Get the names of all public streams.
 
         Use the database in conjunction with the plugin "autosubscriber"
         to avoid unnecessary network requests.
         In case of an error, return an empty list.
         """
-        def without_db() -> List[str]:
-            result: Dict[str, Any] = self.get_streams(
+
+        def without_db() -> list[str]:
+            result: dict[str, Any] = self.get_streams(
                 include_public=True, include_subscribed=False
             )
-            if result['result'] != 'success':
+            if result["result"] != "success":
                 return []
-            return list(map(lambda d: cast(str, d['name']), result['streams']))
+            return list(map(lambda d: cast(str, d["name"]), result["streams"]))
 
         if not use_db:
             return without_db()
 
         try:
-            return list(map(
-                lambda t: cast(str, t[0]),
-                self._db.execute('select StreamName from PublicStreams')
-            ))
+            return list(
+                map(
+                    lambda t: cast(str, t[0]),
+                    self._db.execute("select StreamName from PublicStreams"),
+                )
+            )
         except Exception as e:
             logging.exception(e)
             return without_db()
 
-    def get_raw_message(self, message_id: int, apply_markdown: bool = True) -> Dict[str, str]:
+    def get_raw_message(
+        self, message_id: int, apply_markdown: bool = True
+    ) -> dict[str, str]:
         """Adapt original code and add apply_markdown."""
         return self.call_endpoint(
             url=f"messages/{message_id}",
             method="GET",
-            request={"apply_markdown": apply_markdown}
+            request={"apply_markdown": apply_markdown},
         )
 
-    def get_streams_from_regex(self, regex: str) -> List[str]:
+    def get_streams_from_regex(self, regex: str) -> list[str]:
         """Get the names of all public streams matching a regex.
 
         The regex has to match the full stream name.
@@ -154,37 +164,35 @@ class Client(ZulipClient):
             return []
 
         try:
-            pat: Pattern[str] = re.compile(regex, flags=re.I)
+            pat: re.Pattern[str] = re.compile(regex, flags=re.I)
         except re.error:
             return []
 
         return [
-            stream_name for stream_name in self.get_public_stream_names()
+            stream_name
+            for stream_name in self.get_public_stream_names()
             if pat.fullmatch(stream_name)
         ]
 
-    def get_stream_name(self, stream_id: int) -> Optional[str]:
+    def get_stream_name(self, stream_id: int) -> str | None:
         """Get stream name for provided stream id.
 
         Return the stream name as string or None if the stream name
         could not be determined.
         """
-        result: Dict[str, Any] = self.get_streams(include_all_active=True)
-        if result['result'] != 'success':
+        result: dict[str, Any] = self.get_streams(include_all_active=True)
+        if result["result"] != "success":
             return None
 
-        for stream in result['streams']:
-            if stream['stream_id'] == stream_id:
-                return cast(str, stream['name'])
+        for stream in result["streams"]:
+            if stream["stream_id"] == stream_id:
+                return cast(str, stream["name"])
 
         return None
 
     def get_user_ids_from_attribute(
-        self,
-        attribute: str,
-        values: Iterable[Any],
-        case_sensitive: bool = True
-    ) -> Optional[List[int]]:
+        self, attribute: str, values: Iterable[Any], case_sensitive: bool = True
+    ) -> list[int] | None:
         """Get the user ids from a given user attribute.
 
         Get and return a list of user ids of all users whose profiles
@@ -194,25 +202,29 @@ class Client(ZulipClient):
         interpreted as strings and compared case insensitively.
         Return None on error.
         """
-        result: Dict[str, Any] = self.get_users()
-        if result['result'] != 'success':
+        result: dict[str, Any] = self.get_users()
+        if result["result"] != "success":
             return None
 
         if not case_sensitive:
             values = map(lambda x: str(x).lower(), values)
 
-        value_set: Set[Any] = set(values)
+        value_set: set[Any] = set(values)
 
         return [
-            user['user_id']
-            for user in result['members']
-            if attribute in user and (
-                user[attribute] in value_set if case_sensitive
+            user["user_id"]
+            for user in result["members"]
+            if attribute in user
+            and (
+                user[attribute] in value_set
+                if case_sensitive
                 else str(user[attribute]).lower() in value_set
             )
         ]
 
-    def get_user_ids_from_display_names(self, display_names: Iterable[str]) -> Optional[List[int]]:
+    def get_user_ids_from_display_names(
+        self, display_names: Iterable[str]
+    ) -> list[int] | None:
         """Get the user id from a user display name.
 
         Since there may be multiple users with the same display name,
@@ -220,41 +232,40 @@ class Client(ZulipClient):
         of user display names.
         Return None on error.
         """
-        return self.get_user_ids_from_attribute('full_name', display_names)
+        return self.get_user_ids_from_attribute("full_name", display_names)
 
-    def get_user_ids_from_emails(
-        self,
-        emails: Iterable[str]
-    ) -> Optional[List[int]]:
+    def get_user_ids_from_emails(self, emails: Iterable[str]) -> list[int] | None:
         """Get the user id from a user email address.
 
         Return None on error.
         """
-        return self.get_user_ids_from_attribute('delivery_email', emails, case_sensitive=False)
+        return self.get_user_ids_from_attribute(
+            "delivery_email", emails, case_sensitive=False
+        )
 
-    def get_users(self, request: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def get_users(self, request: dict[str, Any] | None = None) -> dict[str, Any]:
         """Override method from parent class."""
         # Try to minimize the network traffic.
         if request is not None:
             request.update(client_gravatar=True, include_custom_profile_fields=False)
         return super().get_users(request)
 
-    def is_only_pm_recipient(self, message: Dict[str, Any]) -> bool:
+    def is_only_pm_recipient(self, message: dict[str, Any]) -> bool:
         """Check whether the bot is the only recipient of the given pm.
 
         Check whether the message is a private message and the bot is
         the only recipient.
         """
-        if not message['type'] == 'private' or message['sender_id'] == self.id:
+        if not message["type"] == "private" or message["sender_id"] == self.id:
             return False
 
         # Note that the list of users who received the pm includes the sender.
 
-        recipients: List[Dict[str, Any]] = message['display_recipient']
+        recipients: list[dict[str, Any]] = message["display_recipient"]
         if len(recipients) != 2:
             return False
 
-        return self.id in [recipients[0]['id'], recipients[1]['id']]
+        return self.id in [recipients[0]["id"], recipients[1]["id"]]
 
     def private_stream_exists(self, stream_name: str) -> bool:
         """Check if there is a private stream with the given name.
@@ -263,34 +274,36 @@ class Client(ZulipClient):
         Return false if there is no stream with this name or if the
         stream is not private.
         """
-        result: Dict[str, Any] = self.get_streams(include_all_active=True)
-        if result['result'] != 'success':
-            return False # TODO?
+        result: dict[str, Any] = self.get_streams(include_all_active=True)
+        if result["result"] != "success":
+            return False  # TODO?
 
-        for stream in result['streams']:
-            if stream_names_equal(stream['name'], stream_name):
-                return bool(stream['invite_only'])
+        for stream in result["streams"]:
+            if stream_names_equal(stream["name"], stream_name):
+                return bool(stream["invite_only"])
 
         return False
 
     def register(
         self,
-        event_types: Optional[Iterable[str]] = None,
-        narrow: Optional[List[List[str]]] = None,
-        **kwargs: Any
-    ) -> Dict[str, Any]:
+        event_types: Iterable[str] | None = None,
+        narrow: list[list[str]] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Override zulip.Client.register.
 
         Override the parent method in order to enable additional
         parameters for the register() call internally used by
         call_on_each_event.
         """
-        logging.debug('event_types: %s, narrow: %s', str(event_types), str(narrow))
+        logging.debug("event_types: %s, narrow: %s", str(event_types), str(narrow))
         return super().register(event_types, narrow, **self.register_params, **kwargs)
 
-    def send_response(self, response: Response, internal: bool = False) -> Dict[str, Any]:
+    def send_response(
+        self, response: Response, internal: bool = False
+    ) -> dict[str, Any]:
         """Send one single response."""
-        logging.debug('send_response: %s', str(response))
+        logging.debug("send_response: %s", str(response))
 
         # TODO: Handle internal!
         if internal:
@@ -304,16 +317,12 @@ class Client(ZulipClient):
 
     def send_responses(
         self,
-        responses: Union[
-            Response,
-            Iterable[Union[Response, Iterable[Response]]],
-            Union[Response, Iterable[Response]]
-        ],
-        internal: bool = False
+        responses: Response | Iterable[Response | Iterable[Response]],
+        internal: bool = False,
     ) -> None:
         """Send the given responses."""
         if responses is None:
-            logging.debug('responses is None, this should never happen')
+            logging.debug("responses is None, this should never happen")
             return
 
         if not isinstance(responses, IterableClass):
@@ -323,12 +332,8 @@ class Client(ZulipClient):
         for response in responses:
             self.send_responses(response, internal)
 
-
     def subscribe_all_from_stream_to_stream(
-        self,
-        from_stream: str,
-        to_stream: str,
-        description: Optional[str] = None
+        self, from_stream: str, to_stream: str, description: str | None = None
     ) -> bool:
         """Try to subscribe all users from one public stream to another.
 
@@ -343,22 +348,23 @@ class Client(ZulipClient):
 
         Return true on success or false otherwise.
         """
-        if (self.private_stream_exists(from_stream)
-                or self.private_stream_exists(to_stream)):
+        if self.private_stream_exists(from_stream) or self.private_stream_exists(
+            to_stream
+        ):
             return False
 
-        subs: Dict[str, Any] = self.get_subscribers(stream=from_stream)
-        if subs['result'] != 'success':
+        subs: dict[str, Any] = self.get_subscribers(stream=from_stream)
+        if subs["result"] != "success":
             return False
 
-        return self.subscribe_users(subs['subscribers'], to_stream, description)
+        return self.subscribe_users(subs["subscribers"], to_stream, description)
 
     def subscribe_users(
         self,
-        user_ids: List[int],
+        user_ids: list[int],
         stream_name: str,
-        description: Optional[str] = None,
-        allow_private_streams: bool = False
+        description: str | None = None,
+        allow_private_streams: bool = False,
     ) -> bool:
         """Subscribe a list of user ids to a public stream.
 
@@ -377,22 +383,22 @@ class Client(ZulipClient):
         if not allow_private_streams and self.private_stream_exists(stream_name):
             return False
 
-        subscription: Dict[str, str] = {'name': stream_name}
+        subscription: dict[str, str] = {"name": stream_name}
         if description is not None:
             subscription.update(description=description)
 
         for i in range(0, len(user_ids), chunk_size):
             # (a too large index will be automatically reduced to len())
-            user_id_chunk: List[int] = user_ids[i:i + chunk_size]
+            user_id_chunk: list[int] = user_ids[i : i + chunk_size]
 
             while True:
-                result: Dict[str, Any] = self.add_subscriptions(
+                result: dict[str, Any] = self.add_subscriptions(
                     streams=[subscription], principals=user_id_chunk
                 )
-                if result['result'] == 'success':
+                if result["result"] == "success":
                     break
-                if result['code'] == 'UNAUTHORIZED_PRINCIPAL' and 'principal' in result:
-                    user_id_chunk.remove(result['principal'])
+                if result["code"] == "UNAUTHORIZED_PRINCIPAL" and "principal" in result:
+                    user_id_chunk.remove(result["principal"])
                     continue
                 logging.warning(str(result))
                 success = False
@@ -410,13 +416,14 @@ class Client(ZulipClient):
                              considered as privileged, too.
                              Defaults to False.
         """
-        result: Dict[str, Any] = self.get_user_by_id(user_id)
+        result: dict[str, Any] = self.get_user_by_id(user_id)
         if result["result"] != "success":
             return False
-        user: Dict[str, Any] = result["user"]
+        user: dict[str, Any] = result["user"]
 
         return (
             "role" in user
             and isinstance(user["role"], int)
-            and user["role"] in [100, 200] or (allow_moderator and user["role"] == 300)
+            and user["role"] in [100, 200]
+            or (allow_moderator and user["role"] == 300)
         )

@@ -30,18 +30,15 @@ from importlib import import_module
 from inspect import cleandoc, getmembers, isclass, ismodule
 from itertools import repeat
 from os.path import isabs
-from typing import (
-    Any, Callable, Dict, Final, Iterable, List, Match, Optional, Pattern, Tuple, Type, TypeVar,
-    Union, cast
-)
+from typing import Any, Callable, Final, Iterable, Type, TypeVar, cast
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-LOGGING_FORMAT: Final[str] = (
-    '%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s'
-)
+LOGGING_FORMAT: Final[
+    str
+] = "%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s"
 
 
 class StrEnum(str, Enum):
@@ -61,57 +58,54 @@ class MessageType(StrEnum):
     NONE     No message.
     """
 
-    MESSAGE = 'message'
-    EMOJI = 'emoji'
-    NONE = 'none'
+    MESSAGE = "message"
+    EMOJI = "emoji"
+    NONE = "none"
 
 
 class Regex:
     """Some widely used regex methods."""
 
-    _ASTERISKS: Final[Pattern[str]] = re.compile(r'(?:\*\*)')
-    _OPT_ASTERISKS: Final[Pattern[str]] = re.compile(
-        r'(?:{}|)'.format(_ASTERISKS)
+    _ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:\*\*)")
+    _OPT_ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:{}|)".format(_ASTERISKS))
+    _EMOJI: Final[re.Pattern[str]] = re.compile(r"[^:]+")
+    _EMOJI_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r":({}):".format(_EMOJI.pattern)
     )
-    _EMOJI: Final[Pattern[str]] = re.compile(r'[^:]+')
-    _EMOJI_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r':({}):'.format(_EMOJI.pattern)
-    )
-    _TOPIC: Final[Pattern[str]] = re.compile(r'.+')
+    _TOPIC: Final[re.Pattern[str]] = re.compile(r".+")
     # Note: Currently, there are no further restrictions on stream names posed
     # by Zulip. That is why we cannot enforce sensible restrictions here.
-    _STREAM: Final[Pattern[str]] = re.compile(r'.+')
-    _STREAM_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'#{0}({1}){0}'.format(_ASTERISKS.pattern, _STREAM.pattern)
+    _STREAM: Final[re.Pattern[str]] = re.compile(r".+")
+    _STREAM_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"#{0}({1}){0}".format(_ASTERISKS.pattern, _STREAM.pattern)
     )
-    _STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'#{0}({1})>({2}){0}'.format(_ASTERISKS.pattern, r'[^>]+', _TOPIC.pattern)
+    _STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"#{0}({1})>({2}){0}".format(_ASTERISKS.pattern, r"[^>]+", _TOPIC.pattern)
     )
-    _USER: Final[Pattern[str]] = re.compile(r'[^\*\`\\\>\"\@]+')
-    _USER_AUTOCOMPLETED_TEMPLATE: str = r'{0}({1}){0}'.format(
+    _USER: Final[re.Pattern[str]] = re.compile(r"[^\*\`\\\>\"\@]+")
+    _USER_AUTOCOMPLETED_TEMPLATE: str = r"{0}({1}){0}".format(
         _ASTERISKS.pattern, _USER.pattern
     )
-    _USER_AUTOCOMPLETED_ID_TEMPLATE: str = r'{0}({1})\|(\d+){0}'.format(
+    _USER_AUTOCOMPLETED_ID_TEMPLATE: str = r"{0}({1})\|(\d+){0}".format(
         _ASTERISKS.pattern, _USER.pattern
     )
-    _USER_LINKED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@_' + _USER_AUTOCOMPLETED_TEMPLATE
+    _USER_LINKED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@_" + _USER_AUTOCOMPLETED_TEMPLATE
     )
-    _USER_MENTIONED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@' + _USER_AUTOCOMPLETED_TEMPLATE
+    _USER_MENTIONED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@" + _USER_AUTOCOMPLETED_TEMPLATE
     )
-    _USER_LINKED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@_' + _USER_AUTOCOMPLETED_ID_TEMPLATE
+    _USER_LINKED_ID_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@_" + _USER_AUTOCOMPLETED_ID_TEMPLATE
     )
-    _USER_MENTIONED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@' + _USER_AUTOCOMPLETED_ID_TEMPLATE
+    _USER_MENTIONED_ID_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@" + _USER_AUTOCOMPLETED_ID_TEMPLATE
     )
 
     @staticmethod
     def get_captured_string_from_match(
-        match: Optional[Match[str]],
-        capture_group_id: int
-    ) -> Optional[str]:
+        match: re.Match[str] | None, capture_group_id: int
+    ) -> str | None:
         """Return the string of a capture group from a match.
 
         Return None if the match is None or if there is no capture group
@@ -127,10 +121,8 @@ class Regex:
 
     @classmethod
     def get_captured_strings_from_pattern_or(
-        cls,
-        patterns: List[Tuple[Pattern[str], List[int]]],
-        string: str
-    ) -> Optional[List[str]]:
+        cls, patterns: list[tuple[re.Pattern[str], list[int]]], string: str
+    ) -> list[str] | None:
         """Extract a substring from a string.
 
         Walk through the provided patterns, find the first that matchs
@@ -138,20 +130,20 @@ class Regex:
         the given ids.
         Return None if there has been no matching pattern.
         """
-        for (pattern, group_ids) in patterns:
-            match: Optional[Match[str]] = pattern.fullmatch(string)
+        for pattern, group_ids in patterns:
+            match: re.Match[str] | None = pattern.fullmatch(string)
             if match is None:
                 continue
-            result: List[Optional[str]] = [
+            result: list[str | None] = [
                 cls.get_captured_string_from_match(match, group_id)
                 for group_id in group_ids
             ]
-            return None if None in result else cast(List[str], result)
+            return None if None in result else cast(list[str], result)
 
         return None
 
     @classmethod
-    def get_emoji_name(cls, string: str) -> Optional[str]:
+    def get_emoji_name(cls, string: str) -> str | None:
         """Extract the emoji name from a string.
 
         Match the whole string.
@@ -161,13 +153,13 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
             [(cls._EMOJI_AUTOCOMPLETED_CAPTURE, [1]), (cls._EMOJI, [0])], string.strip()
         )
         return None if not result else result[0]
 
     @classmethod
-    def get_stream_name(cls, string: str) -> Optional[str]:
+    def get_stream_name(cls, string: str) -> str | None:
         """Extract the stream name from a string.
 
         Match the whole string.
@@ -177,13 +169,14 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
-            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])], string.strip()
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
+            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])],
+            string.strip(),
         )
         return None if not result else result[0]
 
     @classmethod
-    def get_stream_and_topic_name(cls, string: str) -> Optional[Tuple[str, Optional[str]]]:
+    def get_stream_and_topic_name(cls, string: str) -> tuple[str, str | None] | None:
         """Extract the stream and the topic name from a string.
 
         Match the whole string and try to be smart:
@@ -199,20 +192,22 @@ class Regex:
         This is related to the current behavior of the Zulip server and
         would need to be changed there.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
-            [(cls._STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE, [1, 2]),
-             (cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]),
-             (cls._STREAM, [0])],
-            string.strip()
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
+            [
+                (cls._STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE, [1, 2]),
+                (cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]),
+                (cls._STREAM, [0]),
+            ],
+            string.strip(),
         )
-        return None if not result else (result[0], result[1] if len(result) > 1 else None)
+        return (
+            None if not result else (result[0], result[1] if len(result) > 1 else None)
+        )
 
     @classmethod
     def get_user_name(
-        cls,
-        string: str,
-        get_user_id: bool = False
-    ) -> Optional[Union[str, Tuple[str, Optional[int]]]]:
+        cls, string: str, get_user_id: bool = False
+    ) -> str | tuple[str, int | None] | None:
         """Extract the user name from a string.
 
         Match the whole string.
@@ -226,15 +221,15 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
             [
                 (cls._USER_MENTIONED_ID_CAPTURE, [1, 2]),
                 (cls._USER_LINKED_ID_CAPTURE, [1, 2]),
                 (cls._USER_MENTIONED_CAPTURE, [1]),
                 (cls._USER_LINKED_CAPTURE, [1]),
-                (cls._USER, [0])
+                (cls._USER, [0]),
             ],
-            string.strip()
+            string.strip(),
         )
         if not result:
             return None
@@ -263,6 +258,7 @@ class CommandParser:
        - The preceding "-" can be escaped by two backslashes in order to
          prevent the following token to be considered as option.
     """
+
     class Args(Namespace):
         pass
 
@@ -273,20 +269,23 @@ class CommandParser:
         pass
 
     def __init__(self) -> None:
-        self.commands: Dict[str, Tuple[
-            Dict[str, Optional[Callable[[str], Any]]],
-            Dict[str, Callable[[str], Any]],
-            bool,
-            bool
-        ]] = {}
+        self.commands: dict[
+            str,
+            tuple[
+                dict[str, Callable[[str], Any] | None],
+                dict[str, Callable[[str], Any]],
+                bool,
+                bool,
+            ],
+        ] = {}
 
     def add_subcommand(
         self,
         name: str,
-        opts: Optional[Dict[str, Optional[Callable[[str], Any]]]] = None,
-        args: Optional[Dict[str, Callable[[str], Any]]] = None,
+        opts: dict[str, Callable[[str], Any] | None] | None = None,
+        args: dict[str, Callable[[str], Any]] | None = None,
         greedy: bool = False,
-        optional: bool = False
+        optional: bool = False,
     ) -> bool:
         """Add a subcommand to the parser.
 
@@ -327,8 +326,8 @@ class CommandParser:
         If the given arguments would lead to a broken state of the
         parser, an IllegalCommandParserState exception is thrown.
         """
-        my_opts: Dict[str, Optional[Callable[[str], Any]]] = {}
-        my_args: Dict[str, Callable[[str], Any]] = {}
+        my_opts: dict[str, Callable[[str], Any] | None] = {}
+        my_args: dict[str, Callable[[str], Any]] = {}
         if not name:
             raise self.IllegalCommandParserState()
         if opts is not None:
@@ -338,20 +337,20 @@ class CommandParser:
         self.commands.update({name: (my_opts, my_args, greedy, optional)})
         return True
 
-    def parse(self, command: Optional[str]) -> Optional[Tuple[str, Opts, Args]]:
+    def parse(self, command: str | None) -> tuple[str, Opts, Args] | None:
         """Parse the given command string.
 
         Return the parsed subcommand together with its options and
         arguments.
         """
-        result_args: Optional[Dict[str, Any]]
-        result_opts: Optional[Tuple[Dict[str, Any], List[str]]]
+        result_args: dict[str, Any] | None
+        result_opts: tuple[dict[str, Any], list[str]] | None
 
         if not command or not self.commands:
             return None
 
         # Split on (any) whitespace.
-        tokens: Optional[List[str]] = split(command)
+        tokens: list[str] | None = split(command)
         if not tokens:
             return None
 
@@ -373,27 +372,28 @@ class CommandParser:
 
     def _parse_args(
         self,
-        args: Dict[str, Callable[[str], Any]],
-        tokens: List[str],
+        args: dict[str, Callable[[str], Any]],
+        tokens: list[str],
         greedy: bool,
-        optional: bool
-    ) -> Optional[Dict[str, Any]]:
+        optional: bool,
+    ) -> dict[str, Any] | None:
         """Parse postitional arguments from tokens.
 
         Return the parsed arguments together with their converted value.
         Return None on error.
         """
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
 
         args_len: int = len(args)
         token_len: int = len(tokens)
 
-        if ((args_len > token_len + (1 if optional else 0))
-                or (not greedy and args_len < token_len)):
+        if (args_len > token_len + (1 if optional else 0)) or (
+            not greedy and args_len < token_len
+        ):
             return None
 
-        name: Optional[str] = None
-        converter: Optional[Callable[[str], Any]] = None
+        name: str | None = None
+        converter: Callable[[str], Any] | None = None
 
         # Iterate over expected arguments in the correct order.
         for token, (name, converter) in zip(tokens, args.items()):
@@ -404,9 +404,14 @@ class CommandParser:
 
         # If greedy, consume the remaining tokens into the last argument.
         # Check, however, if there is an optional argument that is not present.
-        if greedy and not (optional and args_len > token_len) and name and converter:
+        if (
+            greedy
+            and not (optional and args_len > token_len)
+            and name
+            and converter is not None
+        ):
             try:
-                rest_list: List[Any] = [converter(t) for t in tokens[args_len:]]
+                rest_list: list[Any] = [converter(t) for t in tokens[args_len:]]
                 rest_list.insert(0, result[name])
             except:
                 return None
@@ -421,10 +426,8 @@ class CommandParser:
         return result
 
     def _parse_opts(
-        self,
-        opts: Dict[str, Optional[Callable[[str], Any]]],
-        tokens: List[str]
-    ) -> Optional[Tuple[Dict[str, Any], List[str]]]:
+        self, opts: dict[str, Callable[[str], Any] | None], tokens: list[str]
+    ) -> tuple[dict[str, Any], list[str]] | None:
         """Parse options from tokens.
 
         Return the parsed options together with their converted
@@ -432,7 +435,7 @@ class CommandParser:
         Return None on error.
         """
         index: int = 0
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         token: str = ""
 
         opts_len: int = len(opts)
@@ -442,14 +445,14 @@ class CommandParser:
         for index in range(len(tokens)):
             token = tokens[index]
             # Stop at the first non-option token.
-            if token[0] != '-':
+            if token[0] != "-":
                 break
             opt: str = token[1]
             if opt not in opts:
                 # Invalid option.
                 return None
             try:
-                converter: Optional[Callable[[str], Any]] = opts[opt]
+                converter: Callable[[str], Any] | None = opts[opt]
                 # "token[2:]" results in an empty string if there is no argument.
                 if converter is None and token[2:]:
                     # Option does not accept any parameter.
@@ -462,7 +465,7 @@ class CommandParser:
                 return None
 
         # Skip last option if there have been only options.
-        if token and token[0] == '-':
+        if token and token[0] == "-":
             index += 1
 
         # Mark all non-existant flags as False and fill the values of
@@ -475,13 +478,13 @@ class CommandParser:
         # Remove all backslash escapes for "-".
         # Note that split() in self.parse() already converted the two
         # backslashes to a single one!
-        return (result, [t[1:] if t[0:2] == r'\-' else t for t in tokens[index:]])
+        return (result, [t[1:] if t[0:2] == r"\-" else t for t in tokens[index:]])
 
 
 class DB:
     """Simple wrapper class to conveniently access a sqlite database."""
 
-    path: Optional[str] = None
+    path: str | None = None
 
     def __init__(self, *args: Any, read_only: bool = False, **kwargs: Any) -> None:
         """Initialize the database connection.
@@ -493,20 +496,22 @@ class DB:
         *args and **kwargs are forwarded to sqlite.connect().
         """
         if not DB.path:
-            raise ValueError('no path to database given')
+            raise ValueError("no path to database given")
         if not isabs(DB.path):
-            raise ValueError('path to database is not absolute')
+            raise ValueError("path to database is not absolute")
 
         self.read_only: bool = read_only
         if self.read_only:
-            kwargs.update(uri = True)
-            self.connection = sqlite.connect('file:' + DB.path + '?mode=ro', *args, **kwargs)
+            kwargs.update(uri=True)
+            self.connection = sqlite.connect(
+                "file:" + DB.path + "?mode=ro", *args, **kwargs
+            )
         else:
             self.connection = sqlite.connect(DB.path, *args, **kwargs)
 
         self.cursor = self.connection.cursor()
         # Switch on foreign key support.
-        self.execute('pragma foreign_keys = on')
+        self.execute("pragma foreign_keys = on")
 
     def checkout_table(self, table: str, schema: str) -> None:
         """Create table if it does not already exist.
@@ -517,17 +522,16 @@ class DB:
         schema  schema of the table in the form of
                     '(Name Type, ...)' --> valid SQL!
         """
-        self.execute('create table if not exists {} {};'.format(table, schema), commit=True)
+        self.execute(
+            "create table if not exists {} {};".format(table, schema), commit=True
+        )
 
     def close(self) -> None:
         self.connection.close()
 
     def execute(
-        self,
-        command: str,
-        *args: Any,
-        commit: bool = False
-    ) -> List[Tuple[Any, ...]]:
+        self, command: str, *args: Any, commit: bool = False
+    ) -> list[tuple[Any, ...]]:
         """Execute an sql command.
 
         Execute an sql command, save the new database state
@@ -573,25 +577,21 @@ class Response:
         Sorry, {}, an error occurred while executing your request.
         """
     )
-    greet_msg: str = 'Hi {}! :-)'
-    ok_emoji: str = 'ok'
-    no_emoji: str = 'cross_mark'
+    greet_msg: str = "Hi {}! :-)"
+    ok_emoji: str = "ok"
+    no_emoji: str = "cross_mark"
 
-    def __init__(
-        self,
-        message_type: MessageType,
-        response: Dict[str, Any]
-    ) -> None:
+    def __init__(self, message_type: MessageType, response: dict[str, Any]) -> None:
         self.message_type: MessageType = message_type
-        self.response: Dict[str, Any] = response
+        self.response: dict[str, Any] = response
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def __str__(self) -> str:
-        return json.dumps({
-            "message_type": str(self.message_type), "response": str(self.response)
-        })
+        return json.dumps(
+            {"message_type": str(self.message_type), "response": str(self.response)}
+        )
 
     def is_none(self) -> bool:
         """Check whether this response has the MessageType 'None'."""
@@ -600,12 +600,12 @@ class Response:
     @classmethod
     def build_message(
         cls,
-        message: Optional[Dict[str, Any]],
+        message: dict[str, Any] | None,
         content: str,
-        msg_type: Optional[str] = None,
-        to: Optional[Union[str, int, List[int], List[str]]] = None,
-        subject: Optional[str] = None
-    ) -> 'Response':
+        msg_type: str | None = None,
+        to: str | int | list[int] | list[str] | None = None,
+        subject: str | None = None,
+    ) -> "Response":
         """Build a message.
 
         Arguments:
@@ -632,40 +632,33 @@ class Response:
 
         Return a Response object.
         """
-        if message is None and (msg_type is None
-                                or to is None
-                                or (msg_type == 'stream' and subject is None)):
+        if message is None and (
+            msg_type is None or to is None or (msg_type == "stream" and subject is None)
+        ):
             return cls.none()
 
         if message is not None:
             if msg_type is None:
-                msg_type = message['type']
-            private: bool = msg_type == 'private'
+                msg_type = message["type"]
+            private: bool = msg_type == "private"
 
             if to is None:
-                to = message['sender_email'] if private else message['stream_id']
+                to = message["sender_email"] if private else message["stream_id"]
 
             if subject is None:
-                subject = message['subject'] if not private else ''
+                subject = message["subject"] if not private else ""
 
         # 'subject' field is ignored for private messages
         # see https://zulip.com/api/send-message#parameter-topic
         return cls(
             MessageType.MESSAGE,
-            dict(**{
-                'type': msg_type,
-                'to': to,
-                'subject': subject,
-                'content': content
-            })
+            dict(
+                **{"type": msg_type, "to": to, "subject": subject, "content": content}
+            ),
         )
 
     @classmethod
-    def build_reaction(
-        cls,
-        message: Dict[str, Any],
-        emoji: str
-    ) -> 'Response':
+    def build_reaction(cls, message: dict[str, Any], emoji: str) -> "Response":
         """Build a reaction response.
 
         Arguments:
@@ -673,17 +666,10 @@ class Response:
         message   The message to react on.
         emoji     The emoji to react with.
         """
-        return cls(
-            MessageType.EMOJI,
-            dict(message_id = message['id'], emoji_name = emoji)
-        )
+        return cls(MessageType.EMOJI, dict(message_id=message["id"], emoji_name=emoji))
 
     @classmethod
-    def build_reaction_from_id(
-        cls,
-        message_id: int,
-        emoji: str
-    ) -> 'Response':
+    def build_reaction_from_id(cls, message_id: int, emoji: str) -> "Response":
         """Build a reaction response.
 
         Arguments:
@@ -691,97 +677,81 @@ class Response:
         message_id   The id of the message to react on.
         emoji        The emoji to react with.
         """
-        return cls(
-            MessageType.EMOJI,
-            dict(message_id = message_id, emoji_name = emoji)
-        )
+        return cls(MessageType.EMOJI, dict(message_id=message_id, emoji_name=emoji))
 
     @classmethod
-    def admin_err(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def admin_err(cls, message: dict[str, Any]) -> "Response":
         """The user has not sufficient rights.
 
         Tell the user that they have not administrator rights. Relevant
         for some commands intended to be exclusively used by admins.
         """
         return cls.build_message(
-            message,
-            cls.admin_err_msg.format(message['sender_full_name'])
+            message, cls.admin_err_msg.format(message["sender_full_name"])
         )
         # TODO: rename to priviledge_err and adapt message
 
     @classmethod
-    def command_not_found(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def command_not_found(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that his command could not be found."""
-        return cls.build_reaction(message, 'question')
+        return cls.build_reaction(message, "question")
 
     @classmethod
-    def error(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def error(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that an error occurred."""
         return cls.build_message(
-            message, cls.error_msg.format(message['sender_full_name'])
+            message, cls.error_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def exception(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def exception(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that an exception occurred."""
         return cls.build_message(
-            message, cls.exception_msg.format(message['sender_full_name'])
+            message, cls.exception_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def greet(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def greet(cls, message: dict[str, Any]) -> "Response":
         """Greet the user."""
         return cls.build_message(
-            message, cls.greet_msg.format(message['sender_full_name'])
+            message, cls.greet_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def ok(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def ok(cls, message: dict[str, Any]) -> "Response":
         """Return an "ok"-reaction."""
         return cls.build_reaction(message, cls.ok_emoji)
 
     @classmethod
-    def no(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def no(cls, message: dict[str, Any]) -> "Response":
         """Return a "no"-reaction."""
         return cls.build_reaction(message, cls.no_emoji)
 
     @classmethod
-    def none(cls) -> 'Response':
+    def none(cls) -> "Response":
         """No response."""
         return cls(MessageType.NONE, {})
 
 
 def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Type[T]]:
-    plugin_classes: List[Type[T]] = []
+    plugin_classes: list[Type[T]] = []
     for _, module in getmembers(import_module(module_path), ismodule):
-        plugin_classes.extend(filter(
-            lambda c: c.__module__ == module.__name__ and issubclass(c, class_type), # type: ignore
-            map(lambda t: t[1], getmembers(module, isclass)) # type: ignore
-        ))
+        plugin_classes.extend(
+            filter(
+                lambda c: c.__module__ == module.__name__ and issubclass(c, class_type),  # type: ignore
+                map(lambda t: t[1], getmembers(module, isclass)),  # type: ignore
+            )
+        )
     return plugin_classes
 
 
 def split(
     string: str,
-    sep: Optional[str] = None,
+    sep: str | None = None,
     exact_split: int = 0,
     discard_empty: bool = True,
-    converter: Optional[List[Callable[[str], Any]]] = None
-) -> Optional[List[Any]]:
+    converter: list[Callable[[str], Any]] | None = None,
+) -> list[Any] | None:
     """Similar to the default split, but respects quotes.
 
     Basically, it's a wrapper for shlex.
@@ -806,6 +776,7 @@ def split(
     Whitespace around the resulting tokens will be removed.
     Return None if there has been an error.
     """
+
     def exec_converter(conv: Callable[[str], Any], arg: str) -> Any:
         try:
             result: Any = conv(arg)
@@ -817,17 +788,17 @@ def split(
         return None
 
     parser: shlex.shlex = shlex.shlex(
-        instream = string, posix = True, punctuation_chars = False
+        instream=string, posix=True, punctuation_chars=False
     )
     # Do not handle comments.
-    parser.commenters = ''
+    parser.commenters = ""
     # Split only on the characters specified as "whitespace".
     parser.whitespace_split = True
     if sep:
         parser.whitespace = sep
 
     try:
-        result: List[Any] = list(map(str.strip, parser))
+        result: list[Any] = list(map(str.strip, parser))
     except:
         return None
 
@@ -846,8 +817,7 @@ def split(
             converter.extend(repeat(converter[-1], len_result - len_converter))
 
         result = [
-            exec_converter(conv, token)
-            for (conv, token) in zip(converter, result)
+            exec_converter(conv, token) for (conv, token) in zip(converter, result)
         ]
 
     return result
@@ -866,10 +836,10 @@ def stream_name_match(stream_reg: str, stream_name: str) -> bool:
 
     Currently, Zulip considers stream names to be case insensitive.
     """
-    return re.fullmatch(stream_reg, stream_name, flags = re.I) is not None
+    return re.fullmatch(stream_reg, stream_name, flags=re.I) is not None
 
 
-def validate_and_return_regex(regex: Optional[str]) -> Optional[str]:
+def validate_and_return_regex(regex: str | None) -> str | None:
     """Validate a regex and return it.
 
     Return None in case the regex is invalid.

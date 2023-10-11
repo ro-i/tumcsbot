@@ -7,13 +7,13 @@ import datetime
 import json
 from inspect import cleandoc
 from sqlite3 import IntegrityError
-from typing import Any, Dict, Final, Iterable, List, Optional, Tuple, Union
+from typing import Any, Final, Iterable
 
 from tumcsbot.lib import CommandParser, DB, Response
-from tumcsbot.plugin import Event, EventType, PluginCommand, PluginThread
+from tumcsbot.plugin import Event, EventType, PluginCommandMixin, PluginThread
 
 
-class Jobs(PluginCommand, PluginThread):
+class Jobs(PluginCommandMixin, PluginThread):
     syntax = cleandoc(
         """
         jobs add <iso_timestamp_string>\\n<command>
@@ -28,60 +28,65 @@ class Jobs(PluginCommand, PluginThread):
         [administrator rights needed]
         """
     )
-    _insert_sql: Final[str] = 'insert into Jobs values (?,?,?,?)'
-    _list_sql: Final[str] = 'select * from Jobs'
-    _remove_sql: Final[str] = 'delete from Jobs where TimeStamp = ?'
-    _select_next_sql: Final[str] = (
-        'select min(TimeStamp), Command, Result from Jobs where Result = "not yet executed"'
-    )
+    _insert_sql: Final[str] = "insert into Jobs values (?,?,?,?)"
+    _list_sql: Final[str] = "select * from Jobs"
+    _remove_sql: Final[str] = "delete from Jobs where TimeStamp = ?"
+    _select_next_sql: Final[
+        str
+    ] = 'select min(TimeStamp), Command, Result from Jobs where Result = "not yet executed"'
     _update_result_sql: Final[str] = "update Jobs set Result = ? where TimeStamp = ?"
 
     def _init_plugin(self) -> None:
-        self.command: Optional[str] = None
-        self.timestamp: Optional[str] = None
+        self.command: str | None = None
+        self.timestamp: str | None = None
 
         # Get own database connection.
         self._db: DB = DB()
         # Check for database table.
-        self._db.checkout_table(table = 'Jobs', schema = (
-            '(TimeStamp timestamp primary key, Command text not null, '
-            'UserId integer not null, Result text not null)'
-        ))
+        self._db.checkout_table(
+            table="Jobs",
+            schema=(
+                "(TimeStamp timestamp primary key, Command text not null, "
+                "UserId integer not null, Result text not null)"
+            ),
+        )
         # Set the timeout for the event queue to block.
         self.reload()
 
         self.command_parser = CommandParser()
         self.command_parser.add_subcommand(
-            'add', args={'timestamp': str, 'command': str}, greedy=True
+            "add", args={"timestamp": str, "command": str}, greedy=True
         )
-        self.command_parser.add_subcommand('remove', args={'timestamp': str})
-        self.command_parser.add_subcommand('list')
+        self.command_parser.add_subcommand("remove", args={"timestamp": str})
+        self.command_parser.add_subcommand("list")
 
-    def handle_message(self, _: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+    def handle_message(self, _: dict[str, Any]) -> Response | Iterable[Response]:
         """Dummy implementation."""
         return Response.none()
 
-    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
-        responses: Union[Response, Iterable[Response]]
-        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
+    def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
+        responses: Response | Iterable[Response]
+        result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
-        message: Dict[str, Any] = event.data["message"]
+        message: dict[str, Any] = event.data["message"]
 
-        if not self.client().get_user_by_id(message['sender_id'])['user']['is_admin']:
+        if not self.client().get_user_by_id(message["sender_id"])["user"]["is_admin"]:
             return Response.admin_err(message)
 
-        result = self.command_parser.parse(message['command'])
+        result = self.command_parser.parse(message["command"])
         if result is None:
             return Response.command_not_found(message)
         command, _, args = result
 
-        if command == 'add':
-            responses = self._add(message, event.data, args.timestamp, " ".join(args.command))
+        if command == "add":
+            responses = self._add(
+                message, event.data, args.timestamp, " ".join(args.command)
+            )
             self.reload()
             return responses
-        if command == 'list':
+        if command == "list":
             return self._list(message)
-        if command == 'remove':
+        if command == "remove":
             responses = self._remove(message, args.timestamp)
             self.reload()
             return responses
@@ -90,36 +95,42 @@ class Jobs(PluginCommand, PluginThread):
 
     def _add(
         self,
-        message: Dict[str, Any],
-        zulip_event: Dict[str, Any],
+        message: dict[str, Any],
+        zulip_event: dict[str, Any],
         timestamp: str,
-        command: str
-    ) -> Union[Response, Iterable[Response]]:
+        command: str,
+    ) -> Response | Iterable[Response]:
         # Validate time format.
         try:
             datetime.datetime.fromisoformat(timestamp)
         except:
             return Response.build_message(message, "invalid time format")
 
-        future_zulip_event: Dict[str, Any] = self._build_command(zulip_event, command)
+        future_zulip_event: dict[str, Any] = self._build_command(zulip_event, command)
         try:
             self._db.execute(
-                self._insert_sql, timestamp, json.dumps(future_zulip_event), message['sender_id'],
-                "not yet executed", commit=True
+                self._insert_sql,
+                timestamp,
+                json.dumps(future_zulip_event),
+                message["sender_id"],
+                "not yet executed",
+                commit=True,
             )
         except IntegrityError as e:
             return Response.build_message(message, str(e))
 
         return Response.ok(message)
 
-    def _build_command(self, zulip_event: Dict[str, Any], command: str) -> Dict[str, Any]:
+    def _build_command(
+        self, zulip_event: dict[str, Any], command: str
+    ) -> dict[str, Any]:
         """Build the command message to be sent in the future.
 
         Replace the original message text with the command and return
         the new message object.
         (Thus, keep the sender and all the other message attributes.)
         """
-        future_zulip_event: Dict[str, Any] = zulip_event.copy()
+        future_zulip_event: dict[str, Any] = zulip_event.copy()
         # Replace original content.
         future_zulip_event["message"]["content"] = command
         # Set the message type to private.
@@ -137,27 +148,35 @@ class Jobs(PluginCommand, PluginThread):
         if self.command is not None and self.timestamp is not None:
             self.logger.debug("fake command %s", self.command)
             # Fake original event.
-            self.plugin_context.push_loopback(Event(
-                sender=self.plugin_name, type=EventType.ZULIP, data=json.loads(self.command)
-            ))
+            self.plugin_context.push_loopback(
+                Event(
+                    sender=self.plugin_name(),
+                    type=EventType.ZULIP,
+                    data=json.loads(self.command),
+                )
+            )
             self._update_result(self.timestamp, "sent")
         self.reload()
 
-    def _list(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        response: str = 'TimeStamp | Command | UserId | Result\n---- | ---- | ---- | ----'
-        for (ts, cmd, user, result) in self._db.execute(self._list_sql):
-            response += "\n" + '{} | {} | {} | {}'.format(ts, cmd, user, result)
+    def _list(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        response: str = (
+            "TimeStamp | Command | UserId | Result\n---- | ---- | ---- | ----"
+        )
+        for ts, cmd, user, result in self._db.execute(self._list_sql):
+            response += "\n" + "{} | {} | {} | {}".format(ts, cmd, user, result)
         return Response.build_message(message, response)
 
     def reload(self) -> None:
         while True:
-            result: List[Tuple[Any, ...]] = self._db.execute(self._select_next_sql)
+            result: list[tuple[Any, ...]] = self._db.execute(self._select_next_sql)
             if not result or not result[0] or result[0][0] is None:
                 self.logger.debug("disable queue timeout")
                 self.queue_timeout = None
                 break
             try:
-                todo_time: datetime.datetime = datetime.datetime.fromisoformat(result[0][0])
+                todo_time: datetime.datetime = datetime.datetime.fromisoformat(
+                    result[0][0]
+                )
             except:
                 self._update_result(result[0][0], "cannot execute: invalid timestamp")
                 continue
@@ -173,9 +192,9 @@ class Jobs(PluginCommand, PluginThread):
 
     def _remove(
         self,
-        message: Dict[str, Any],
+        message: dict[str, Any],
         timestamp: str,
-    ) -> Union[Response, Iterable[Response]]:
+    ) -> Response | Iterable[Response]:
         self._db.execute(self._remove_sql, timestamp, commit=True)
         return Response.ok(message)
 

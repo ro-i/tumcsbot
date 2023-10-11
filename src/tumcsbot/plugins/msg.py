@@ -4,13 +4,13 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import CommandParser, DB, Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class Msg(PluginCommand, PluginThread):
+class Msg(PluginCommandMixin, PluginThread):
     syntax = cleandoc(
         """
         msg add <identifier> <text>
@@ -27,60 +27,60 @@ class Msg(PluginCommand, PluginThread):
         [administrator/moderator rights needed]
         """
     )
-    _delete_sql: str = 'delete from Messages where MsgId = ?'
-    _list_sql: str = 'select * from Messages'
-    _search_sql: str = 'select MsgText from Messages where MsgId = ?'
-    _update_sql: str = 'replace into Messages values (?,?)'
+    _delete_sql: str = "delete from Messages where MsgId = ?"
+    _list_sql: str = "select * from Messages"
+    _search_sql: str = "select MsgText from Messages where MsgId = ?"
+    _update_sql: str = "replace into Messages values (?,?)"
 
     def _init_plugin(self) -> None:
         # Get own database connection.
         self._db: DB = DB()
         # Check for database table.
         self._db.checkout_table(
-            table = 'Messages', schema = '(MsgId text primary key, MsgText text not null)'
+            table="Messages", schema="(MsgId text primary key, MsgText text not null)"
         )
         self.command_parser: CommandParser = CommandParser()
-        self.command_parser.add_subcommand('add', args={'id': str, 'text': str})
-        self.command_parser.add_subcommand('send', args={'id': str})
-        self.command_parser.add_subcommand('remove', args={'id': str})
-        self.command_parser.add_subcommand('list')
+        self.command_parser.add_subcommand("add", args={"id": str, "text": str})
+        self.command_parser.add_subcommand("send", args={"id": str})
+        self.command_parser.add_subcommand("remove", args={"id": str})
+        self.command_parser.add_subcommand("list")
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
-        result_sql: List[Tuple[Any, ...]]
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
+        result_sql: list[tuple[Any, ...]]
 
-        if not self.client().user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message["sender_id"]):
             return Response.admin_err(message)
 
         # Get command and parameters.
-        result = self.command_parser.parse(message['command'])
+        result = self.command_parser.parse(message["command"])
         if result is None:
             return Response.command_not_found(message)
         command, _, args = result
 
-        if command == 'list':
-            response: str = '***List of Identifiers and Messages***\n'
-            for (ident, text) in self._db.execute(self._list_sql):
-                response += '\n--------\nTitle: **{}**\n{}'.format(ident, text)
+        if command == "list":
+            response: str = "***List of Identifiers and Messages***\n"
+            for ident, text in self._db.execute(self._list_sql):
+                response += "\n--------\nTitle: **{}**\n{}".format(ident, text)
             return Response.build_message(message, response)
 
         # Use lowercase -> no need for case insensitivity.
         ident = args.id.lower()
 
-        if command == 'send':
+        if command == "send":
             result_sql = self._db.execute(self._search_sql, ident)
             if not result_sql:
                 return Response.command_not_found(message)
             # Remove requesting message.
-            self.client().delete_message(message['id'])
+            self.client().delete_message(message["id"])
             return Response.build_message(message, result_sql[0][0])
 
-        if command == 'add':
-            self._db.execute(self._update_sql, ident, args.text, commit = True)
+        if command == "add":
+            self._db.execute(self._update_sql, ident, args.text, commit=True)
             return Response.ok(message)
 
-        if command == 'remove':
-            self._db.execute(self._delete_sql, ident, commit = True)
+        if command == "remove":
+            self._db.execute(self._delete_sql, ident, commit=True)
             return Response.ok(message)
 
         return Response.command_not_found(message)

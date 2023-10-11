@@ -5,16 +5,15 @@
 
 import re
 from inspect import cleandoc
-from typing import cast, Any, Callable, Dict, Iterable, List, Optional, Pattern, Set, \
-    Tuple, Union
+from typing import cast, Any, Callable, Iterable
 from sqlite3 import IntegrityError
 
 from tumcsbot.lib import stream_name_match, CommandParser, DB, Regex, Response
-from tumcsbot.plugin import Event, PluginCommand, PluginThread
+from tumcsbot.plugin import Event, PluginCommandMixin, PluginProcess
 
 
-class Group(PluginCommand, PluginThread):
-    zulip_events = ['message', 'reaction', 'stream']
+class Group(PluginCommandMixin, PluginProcess):
+    zulip_events = ["message", "reaction", "stream"]
     syntax = cleandoc(
         """
         group (un)subscribe <group_id>
@@ -86,294 +85,326 @@ class Group(PluginCommand, PluginThread):
         Have a nice day! :sunglasses:
         """
     )
-    _announcement_msg_table_row_fmt: str = '%s | :%s:'
-    _announcement_msg_table_row_regex: str = r'\n*%s \| :[^:]+:\s*\n*'
-    _claim_all_sql: str = 'insert into GroupClaimsAll values (?)'
-    _claim_group_sql: str = 'insert into GroupClaims values (?,?)'
-    _get_all_emojis_sql: str = 'select Emoji from Groups'
-    _get_claims_for_all_sql: str = 'select MessageId from GroupClaimsAll'
-    _get_claims_for_group: str = 'select MessageId from GroupClaims where GroupId = ?'
-    _get_emoji_from_group_sql: str = 'select Emoji from Groups where Id = ?'
-    _get_group_from_emoji_sql: str = 'select Id from Groups where Emoji = ?'
-    _get_group_subscribers_sql: str = 'select UserId from GroupUsers where GroupId = ?'
-    _get_streams_sql: str = 'select Streams from Groups where Id = ? collate nocase'
-    _insert_sql: str = 'insert into Groups values (?,?,?)'
+    _announcement_msg_table_row_fmt: str = "%s | :%s:"
+    _announcement_msg_table_row_regex: str = r"\n*%s \| :[^:]+:\s*\n*"
+    _claim_all_sql: str = "insert into GroupClaimsAll values (?)"
+    _claim_group_sql: str = "insert into GroupClaims values (?,?)"
+    _get_all_emojis_sql: str = "select Emoji from Groups"
+    _get_claims_for_all_sql: str = "select MessageId from GroupClaimsAll"
+    _get_claims_for_group: str = "select MessageId from GroupClaims where GroupId = ?"
+    _get_emoji_from_group_sql: str = "select Emoji from Groups where Id = ?"
+    _get_group_from_emoji_sql: str = "select Id from Groups where Emoji = ?"
+    _get_group_subscribers_sql: str = "select UserId from GroupUsers where GroupId = ?"
+    _get_streams_sql: str = "select Streams from Groups where Id = ? collate nocase"
+    _insert_sql: str = "insert into Groups values (?,?,?)"
     _is_group_claimed_by_msg_sql: str = (
-        'select * from GroupClaims where GroupId = ? and MessageId = ?'
+        "select * from GroupClaims where GroupId = ? and MessageId = ?"
     )
-    _is_message_announcement_sql: str = 'select * from GroupClaimsAll where MessageId = ?'
-    _list_sql: str = 'select * from Groups'
-    _remove_sql: str = 'delete from Groups where Id = ? collate nocase'
-    _subscribe_user_sql: str = 'insert into GroupUsers values (?,?)'
-    _update_streams_sql: str = 'update Groups set Streams = ? where Id = ? collate nocase'
+    _is_message_announcement_sql: str = (
+        "select * from GroupClaimsAll where MessageId = ?"
+    )
+    _list_sql: str = "select * from Groups"
+    _remove_sql: str = "delete from Groups where Id = ? collate nocase"
+    _subscribe_user_sql: str = "insert into GroupUsers values (?,?)"
+    _update_streams_sql: str = (
+        "update Groups set Streams = ? where Id = ? collate nocase"
+    )
     _unclaim_msg_from_group_sql: str = (
-        'delete from GroupClaims where MessageId = ? and GroupId = ?'
+        "delete from GroupClaims where MessageId = ? and GroupId = ?"
     )
-    _unclaim_msg_for_all_sql: str = 'delete from GroupClaimsAll where MessageId = ?'
-    _unsubscribe_user_sql: str = 'delete from GroupUsers where UserId = ? and GroupId = ?'
+    _unclaim_msg_for_all_sql: str = "delete from GroupClaimsAll where MessageId = ?"
+    _unsubscribe_user_sql: str = (
+        "delete from GroupUsers where UserId = ? and GroupId = ?"
+    )
 
     def _init_plugin(self) -> None:
         # Get own database connection.
         self._db: DB = DB()
         # Check for database tables.
         self._db.checkout_table(
-            table = 'Groups',
-            schema = '(Id text primary key, Emoji text not null unique, Streams text not null)'
+            table="Groups",
+            schema="(Id text primary key, Emoji text not null unique, Streams text not null)",
         )
         self._db.checkout_table(
-            table = 'GroupUsers',
-            schema = ('(UserId integer not null, GroupId text, '
-                      'foreign key(GroupId) references Groups(ID) on delete cascade, '
-                      'primary key(UserId, GroupID))')
+            table="GroupUsers",
+            schema=(
+                "(UserId integer not null, GroupId text, "
+                "foreign key(GroupId) references Groups(ID) on delete cascade, "
+                "primary key(UserId, GroupID))"
+            ),
         )
         self._db.checkout_table(
-            table = 'GroupClaims',
-            schema = ('(MessageId integer not null, GroupId text, '
-                      'foreign key(GroupId) references Groups(ID) on delete cascade, '
-                      'primary key(MessageId, GroupId))')
+            table="GroupClaims",
+            schema=(
+                "(MessageId integer not null, GroupId text, "
+                "foreign key(GroupId) references Groups(ID) on delete cascade, "
+                "primary key(MessageId, GroupId))"
+            ),
         )
-        self._db.checkout_table('GroupClaimsAll', '(MessageId integer primary key)')
+        self._db.checkout_table("GroupClaimsAll", "(MessageId integer primary key)")
 
         # Init command parsing.
         self.command_parser = CommandParser()
-        self.command_parser.add_subcommand('subscribe', args={'group_id': str})
-        self.command_parser.add_subcommand('unsubscribe', args={'group_id': str})
+        self.command_parser.add_subcommand("subscribe", args={"group_id": str})
+        self.command_parser.add_subcommand("unsubscribe", args={"group_id": str})
         self.command_parser.add_subcommand(
-            'add', args={'group_id': str, 'emoji': Regex.get_emoji_name}
+            "add", args={"group_id": str, "emoji": Regex.get_emoji_name}
         )
-        self.command_parser.add_subcommand('remove', args={'group_id': str})
+        self.command_parser.add_subcommand("remove", args={"group_id": str})
         self.command_parser.add_subcommand(
-            'add_streams', args={'group_id': str, 'streams': str}, greedy = True
-        )
-        self.command_parser.add_subcommand(
-            'remove_streams', args={'group_id': str, 'streams': str}, greedy = True
-        )
-        self.command_parser.add_subcommand('list')
-        self.command_parser.add_subcommand(
-            'claim', args={'group_id': str, 'text': str}, greedy = True, optional = True
+            "add_streams", args={"group_id": str, "streams": str}, greedy=True
         )
         self.command_parser.add_subcommand(
-            'claim_message', args={'group_id': str, 'message_id': str}
+            "remove_streams", args={"group_id": str, "streams": str}, greedy=True
         )
-        self.command_parser.add_subcommand('unclaim', args={'group_id': str, 'message_id': int})
-        self.command_parser.add_subcommand('announce')
-        self.command_parser.add_subcommand('unannounce', args={'message_id': int})
+        self.command_parser.add_subcommand("list")
+        self.command_parser.add_subcommand(
+            "claim", args={"group_id": str, "text": str}, greedy=True, optional=True
+        )
+        self.command_parser.add_subcommand(
+            "claim_message", args={"group_id": str, "message_id": str}
+        )
+        self.command_parser.add_subcommand(
+            "unclaim", args={"group_id": str, "message_id": int}
+        )
+        self.command_parser.add_subcommand("announce")
+        self.command_parser.add_subcommand("unannounce", args={"message_id": int})
 
         # Init some usefule constants.
-        self._get_emoji: Pattern[str] = re.compile(r'\s*:?([^:]+):?\s*')
+        self._get_emoji: re.Pattern[str] = re.compile(r"\s*:?([^:]+):?\s*")
         self.client_id: int = self.client().id
         # (removing trailing 'api/' from host url).
-        self.message_link: str = '[{0}](' + self.client().base_url[:-4] + '#narrow/id/{0})'
+        self.message_link: str = (
+            "[{0}](" + self.client().base_url[:-4] + "#narrow/id/{0})"
+        )
 
-    def handle_zulip_event(self, event: Event) -> Union[Response, Iterable[Response]]:
-        if event.data['type'] == 'reaction':
+    def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
+        if event.data["type"] == "reaction":
             return self.handle_reaction_event(event.data)
-        if event.data['type'] == 'stream':
+        if event.data["type"] == "stream":
             return self.handle_stream_event(event.data)
-        return self.handle_message(event.data['message'])
+        return self.handle_message(event.data["message"])
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        result: Optional[Tuple[str, CommandParser.Opts, CommandParser.Args]]
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
         # Get command and parameters.
-        result = self.command_parser.parse(message['command'])
+        result = self.command_parser.parse(message["command"])
         if result is None:
             return Response.command_not_found(message)
         command, _, args = result
 
-        if command == 'subscribe':
-            return self._subscribe(message['sender_id'], args.group_id, message)
-        if command == 'unsubscribe':
-            return self._unsubscribe(message['sender_id'], args.group_id, message)
+        if command == "subscribe":
+            return self._subscribe(message["sender_id"], args.group_id, message)
+        if command == "unsubscribe":
+            return self._unsubscribe(message["sender_id"], args.group_id, message)
 
-        if not self.client().user_is_privileged(message['sender_id']):
+        if not self.client().user_is_privileged(message["sender_id"]):
             return Response.admin_err(message)
 
-        if command == 'list':
+        if command == "list":
             return self._list(message)
-        if command == 'announce':
-            if message['type'] != 'stream':
-                return Response.build_message(message, 'Claim only stream messages.')
+        if command == "announce":
+            if message["type"] != "stream":
+                return Response.build_message(message, "Claim only stream messages.")
             return self._announce(message)
-        if command == 'unannounce':
+        if command == "unannounce":
             return self._unannounce(message, args.message_id)
-        if command == 'claim':
-            if message['type'] != 'stream':
-                return Response.build_message(message, 'Claim only stream messages.')
-            return self._claim(message, args.group_id, message['id'])
-        if command == 'claim_message':
+        if command == "claim":
+            if message["type"] != "stream":
+                return Response.build_message(message, "Claim only stream messages.")
+            return self._claim(message, args.group_id, message["id"])
+        if command == "claim_message":
             return self._claim(message, args.group_id, args.message_id)
-        if command == 'unclaim':
+        if command == "unclaim":
             return self._unclaim(message, args.group_id, args.message_id)
-        if command == 'add':
+        if command == "add":
             return self._add(message, args.group_id, args.emoji)
-        if command == 'remove':
+        if command == "remove":
             return self._remove(message, args.group_id)
-        if command in ['add_streams', 'remove_streams']:
+        if command in ["add_streams", "remove_streams"]:
             return self._change_streams(message, args.group_id, command, args.streams)
 
         return Response.command_not_found(message)
 
-    def handle_reaction_event(self, event: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        group_id: Optional[str] = self._get_group_id_from_emoji_event(
-            event['message_id'], event['emoji_name']
+    def handle_reaction_event(
+        self, event: dict[str, Any]
+    ) -> Response | Iterable[Response]:
+        group_id: str | None = self._get_group_id_from_emoji_event(
+            event["message_id"], event["emoji_name"]
         )
 
         if group_id is None:
             return Response.none()
-        if event['op'] == 'add':
-            return self._subscribe(event['user_id'], group_id)
-        if event['op'] == 'remove':
-            return self._unsubscribe(event['user_id'], group_id)
+        if event["op"] == "add":
+            return self._subscribe(event["user_id"], group_id)
+        if event["op"] == "remove":
+            return self._unsubscribe(event["user_id"], group_id)
 
         return Response.none()
 
-    def handle_stream_event(self, event: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        for stream in event['streams']:
+    def handle_stream_event(
+        self, event: dict[str, Any]
+    ) -> Response | Iterable[Response]:
+        for stream in event["streams"]:
             # Get all the groups this stream belongs to.
-            group_ids: List[str] = self._get_group_ids_from_stream(stream['name'])
+            group_ids: list[str] = self._get_group_ids_from_stream(stream["name"])
             # Get all user ids to subscribe to this new stream ...
-            user_ids: List[int] = self._get_group_subscribers(group_ids)
+            user_ids: list[int] = self._get_group_subscribers(group_ids)
             # ... and subscribe them.
-            self.client().subscribe_users(user_ids, stream['name'])
+            self.client().subscribe_users(user_ids, stream["name"])
 
         return Response.none()
 
     def is_responsible(self, event: Event) -> bool:
         return (
             super().is_responsible(event)
-            or (event.data['type'] == 'reaction'
-                and event.data['op'] in ['add', 'remove']
-                and event.data['user_id'] != self.client_id)
-            or (event.data['type'] == 'stream' and event.data['op'] == 'create')
+            or (
+                event.data["type"] == "reaction"
+                and event.data["op"] in ["add", "remove"]
+                and event.data["user_id"] != self.client_id
+            )
+            or (event.data["type"] == "stream" and event.data["op"] == "create")
         )
 
     def _add(
-        self,
-        message: Dict[str, Any],
-        group_id: str,
-        emoji: str
-    ) -> Union[Response, Iterable[Response]]:
+        self, message: dict[str, Any], group_id: str, emoji: str
+    ) -> Response | Iterable[Response]:
         """Command `group add <id> <emoji>`."""
-        if '\n' in group_id:
-            return Response.build_message(message, 'The group id must not contain newlines.')
+        if "\n" in group_id:
+            return Response.build_message(
+                message, "The group id must not contain newlines."
+            )
 
         try:
-            self._db.execute(
-                self._insert_sql, group_id, emoji, '', commit = True
-            )
+            self._db.execute(self._insert_sql, group_id, emoji, "", commit=True)
         except IntegrityError as e:
             return Response.build_message(message, str(e))
 
         # Update the announcement messages.
         if not self._announcements_add_group(group_id):
             return Response.build_message(
-                message, 'Group added, but announcement failed for some messages.'
+                message, "Group added, but announcement failed for some messages."
             )
 
         return Response.ok(message)
 
-    def _announce(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        table: str = '\n'.join(
+    def _announce(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        table: str = "\n".join(
             self._announcement_msg_table_row_fmt % (group_id, emoji)
             for group_id, emoji, _ in self._db.execute(self._list_sql)
         )
 
         # Remove the requesting message.
-        self.client().delete_message(message['id'])
+        self.client().delete_message(message["id"])
 
         # Send own message.
-        result: Dict[str, Any] = self.client().send_response(
+        result: dict[str, Any] = self.client().send_response(
             Response.build_message(message, self._announcement_msg.format(table))
         )
-        if result['result'] != 'success':
+        if result["result"] != "success":
             return Response.none()
 
         # Insert the id of the bot's message into the database.
         try:
-            self._db.execute(self._claim_all_sql, result['id'], commit = True)
+            self._db.execute(self._claim_all_sql, result["id"], commit=True)
         except Exception as e:
             return Response.build_message(message, str(e))
 
         # Get all the currently existant emojis.
-        result_sql: List[Tuple[Any, ...]] = self._db.execute(self._get_all_emojis_sql)
+        result_sql: list[tuple[Any, ...]] = self._db.execute(self._get_all_emojis_sql)
         if not result_sql:
             return Response.none()
 
         # React with all those emojis on this message.
         for emoji in map(lambda t: cast(str, t[0]), result_sql):
-            self.client().send_response(Response.build_reaction_from_id(result['id'], emoji))
+            self.client().send_response(
+                Response.build_reaction_from_id(result["id"], emoji)
+            )
 
         return Response.none()
 
     def _announcements_add_group(self, group_id: str) -> bool:
         """Add the given group to all announcement messages."""
-        emoji: Optional[str] = self._get_emoji_from_group(group_id)
+        emoji: str | None = self._get_emoji_from_group(group_id)
         if not emoji:
             return False
         to_insert: str = self._announcement_msg_table_row_fmt % (group_id, emoji)
 
-        pattern: Pattern[str] = re.compile(r'\n*\*to be continued\*\n*')
+        pattern: re.Pattern[str] = re.compile(r"\n*\*to be continued\*\n*")
 
-        return self._do_for_all_announcement_messages([
-            lambda msg: msg.update(content = pattern.sub(
-                '\n' + to_insert + '\n*to be continued*\n\n', msg['content']
-            )),
-            lambda msg: self.client().send_response(
-                Response.build_reaction(msg, cast(str, emoji))
-            )
-        ])
+        return self._do_for_all_announcement_messages(
+            [
+                lambda msg: msg.update(
+                    content=pattern.sub(
+                        "\n" + to_insert + "\n*to be continued*\n\n", msg["content"]
+                    )
+                ),
+                lambda msg: self.client().send_response(
+                    Response.build_reaction(msg, cast(str, emoji))
+                ),
+            ]
+        )
 
     def _announcements_remove_group(self, group_id: str) -> bool:
         """Remove the given group from all announcement messages."""
-        emoji: Optional[str] = self._get_emoji_from_group(group_id)
+        emoji: str | None = self._get_emoji_from_group(group_id)
         if not emoji:
             return False
 
-        pattern: Pattern[str] = re.compile(
+        pattern: re.Pattern[str] = re.compile(
             self._announcement_msg_table_row_regex % re.escape(group_id)
         )
 
-        return self._do_for_all_announcement_messages([
-            lambda msg: msg.update(content = pattern.sub('\n', msg['content'])),
-            lambda msg: self.client().remove_reaction(
-                {'message_id': msg['id'], 'emoji_name': cast(str, emoji)}
-            )
-        ])
+        return self._do_for_all_announcement_messages(
+            [
+                lambda msg: msg.update(content=pattern.sub("\n", msg["content"])),
+                lambda msg: self.client().remove_reaction(
+                    {"message_id": msg["id"], "emoji_name": cast(str, emoji)}
+                ),
+            ]
+        )
 
     def _change_streams(
         self,
-        message: Dict[str, Any],
+        message: dict[str, Any],
         group_id: str,
         command: str,
-        change_stream_regs: List[str]
-    ) -> Union[Response, Iterable[Response]]:
+        change_stream_regs: list[str],
+    ) -> Response | Iterable[Response]:
         """Command `group (add_streams|remove_streams) <id> <stream>...`."""
         # Validate the regexes.
         for reg in change_stream_regs:
             try:
                 re.compile(reg)
             except re.error as e:
-                return Response.build_message(message, 'invalid regex: %s\n%s', reg, str(e))
+                return Response.build_message(
+                    message, "invalid regex: %s\n%s", reg, str(e)
+                )
 
-        result_sql: List[Tuple[Any, ...]] = self._db.execute(
-            self._get_streams_sql, group_id, commit = True
+        result_sql: list[tuple[Any, ...]] = self._db.execute(
+            self._get_streams_sql, group_id, commit=True
         )
         if not result_sql:
-            return Response.build_message(message, f'Group {group_id} does not exist.')
+            return Response.build_message(message, f"Group {group_id} does not exist.")
 
         # Current stream patterns.
-        stream_list: List[str] = result_sql[0][0].split('\n')
+        stream_list: list[str] = result_sql[0][0].split("\n")
         # The string containing the new list of stream patterns (newline separated).
         # The patterns have to be non-empty.
-        new_streams: str = '\n'.join(filter(
-            bool,
-            set(stream_list + change_stream_regs) if command == 'add_streams' else
-            [s for s in stream_list if s not in change_stream_regs]
-        ))
+        new_streams: str = "\n".join(
+            filter(
+                bool,
+                set(stream_list + change_stream_regs)
+                if command == "add_streams"
+                else [s for s in stream_list if s not in change_stream_regs],
+            )
+        )
 
         try:
-            self._db.execute(self._update_streams_sql, new_streams, group_id, commit = True)
+            self._db.execute(
+                self._update_streams_sql, new_streams, group_id, commit=True
+            )
         except Exception as e:
             self.logger.exception(e)
             return Response.build_message(message, str(e))
@@ -386,25 +417,21 @@ class Group(PluginCommand, PluginThread):
         return Response.ok(message)
 
     def _claim(
-        self,
-        message: Dict[str, Any],
-        group_id: str,
-        message_id: Optional[int]
-    ) -> Union[Response, Iterable[Response]]:
+        self, message: dict[str, Any], group_id: str, message_id: int | None
+    ) -> Response | Iterable[Response]:
         """Command `group claim <group_id>` or `group claim_message <group_id> [message_id]."""
         if message_id is None:
-            message_id = message['id']
+            message_id = message["id"]
 
         if group_id:
-            self._db.execute(self._claim_group_sql, message_id, group_id, commit = True)
+            self._db.execute(self._claim_group_sql, message_id, group_id, commit=True)
         else:
-            self._db.execute(self._claim_all_sql, message_id, commit = True)
+            self._db.execute(self._claim_all_sql, message_id, commit=True)
 
         return Response.ok(message)
 
     def _do_for_all_announcement_messages(
-        self,
-        funcs: List[Callable[[Dict[str, Any]], Any]]
+        self, funcs: list[Callable[[dict[str, Any]], Any]]
     ) -> bool:
         """Apply functions to all announcement messages.
 
@@ -414,40 +441,42 @@ class Group(PluginCommand, PluginThread):
         success: bool = True
 
         for (msg_id,) in self._db.execute(self._get_claims_for_all_sql):
-            request: Dict[str, Any] = {
-                'anchor': msg_id, 'num_before': 0, 'num_after': 1,
+            request: dict[str, Any] = {
+                "anchor": msg_id,
+                "num_before": 0,
+                "num_after": 1,
             }
-            result: Dict[str, Any] = self.client().get_messages(request)
-            if result['result'] != 'success' or not result['messages']:
-                self.logger.warning('could not get message %s', str(request))
+            result: dict[str, Any] = self.client().get_messages(request)
+            if result["result"] != "success" or not result["messages"]:
+                self.logger.warning("could not get message %s", str(request))
                 success = False
                 continue
-            msg: Dict[str, Any] = result['messages'][0]
+            msg: dict[str, Any] = result["messages"][0]
             for func in funcs:
                 func(msg)
-            result = self.client().update_message({'message_id': msg_id, 'content': msg['content']})
-            if result['result'] != 'success':
-                self.logger.warning('could not edit message %d: %s', msg_id, str(result))
+            result = self.client().update_message(
+                {"message_id": msg_id, "content": msg["content"]}
+            )
+            if result["result"] != "success":
+                self.logger.warning(
+                    "could not edit message %d: %s", msg_id, str(result)
+                )
                 success = False
 
         return success
 
-    def _get_emoji_from_group(self, group_id: str) -> Optional[str]:
+    def _get_emoji_from_group(self, group_id: str) -> str | None:
         """Get the emoji for a given group id."""
-        result_sql: List[Tuple[Any, ...]] = self._db.execute(
+        result_sql: list[tuple[Any, ...]] = self._db.execute(
             self._get_emoji_from_group_sql, group_id
         )
         if not result_sql:
-            self.logger.debug('no emoji found for group %s', group_id)
+            self.logger.debug("no emoji found for group %s", group_id)
             return None
         return cast(str, result_sql[0][0])
 
-    def _get_group_id_from_emoji_event(
-        self,
-        message_id: int,
-        emoji: str
-    ) -> Optional[str]:
-        result_sql: List[Tuple[Any, ...]]
+    def _get_group_id_from_emoji_event(self, message_id: int, emoji: str) -> str | None:
+        result_sql: list[tuple[Any, ...]]
 
         result_sql = self._db.execute(self._get_group_from_emoji_sql, emoji)
         if not result_sql:
@@ -455,19 +484,20 @@ class Group(PluginCommand, PluginThread):
         group_id: str = cast(str, result_sql[0][0])
 
         # Check whether the message is claimed by this group.
-        result_sql = self._db.execute(self._is_group_claimed_by_msg_sql, group_id, message_id)
+        result_sql = self._db.execute(
+            self._is_group_claimed_by_msg_sql, group_id, message_id
+        )
         if not result_sql:
             result_sql = self._db.execute(self._is_message_announcement_sql, message_id)
 
         return group_id if result_sql else None
 
-
-    def _get_group_ids_from_stream(self, stream_name: str) -> List[str]:
+    def _get_group_ids_from_stream(self, stream_name: str) -> list[str]:
         """Get the ids of the groups the given stream name belongs to."""
-        result: List[str] = []
+        result: list[str] = []
 
         for group_id, _, stream_regs_str in self._db.execute(self._list_sql):
-            stream_regs: List[str] = stream_regs_str.split('\n')
+            stream_regs: list[str] = stream_regs_str.split("\n")
             for stream_reg in stream_regs:
                 if not stream_name_match(stream_reg, stream_name):
                     continue
@@ -476,38 +506,48 @@ class Group(PluginCommand, PluginThread):
 
         return result
 
-    def _get_group_subscribers(self, group_ids: List[str]) -> List[int]:
+    def _get_group_subscribers(self, group_ids: list[str]) -> list[int]:
         """Get the user_ids of all subscribers of the given groups.
 
         Return no duplicate user_ids.
         """
-        result: Set[int] = set()
+        result: set[int] = set()
 
         for group_id in group_ids:
-            result = result.union(set(
-                user_id for (user_id,) in
-                self._db.execute(self._get_group_subscribers_sql, group_id)
-            ))
+            result = result.union(
+                set(
+                    user_id
+                    for (user_id,) in self._db.execute(
+                        self._get_group_subscribers_sql, group_id
+                    )
+                )
+            )
 
         return list(result)
 
-    def _list(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
+    def _list(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         """Command `group list`."""
-        response: str = 'Group Id | Emoji | Streams | ClaimedBy\n---- | ---- | ---- | ----'
+        response: str = (
+            "Group Id | Emoji | Streams | ClaimedBy\n---- | ---- | ---- | ----"
+        )
 
-        for (group_id, emoji, streams) in self._db.execute(self._list_sql):
-            streams_concat: str = ', '.join(
-                '"{}"'.format(s) for s in streams.split('\n')
+        for group_id, emoji, streams in self._db.execute(self._list_sql):
+            streams_concat: str = ", ".join(
+                '"{}"'.format(s) for s in streams.split("\n")
             )
-            claims: str = ', '.join([
-                self.message_link.format(msg_id)
-                for (msg_id,) in self._db.execute(self._get_claims_for_group, group_id)
-            ])
-            response += '\n{0} | {1} :{1}: | `{2}` | {3}'.format(
+            claims: str = ", ".join(
+                [
+                    self.message_link.format(msg_id)
+                    for (msg_id,) in self._db.execute(
+                        self._get_claims_for_group, group_id
+                    )
+                ]
+            )
+            response += "\n{0} | {1} :{1}: | `{2}` | {3}".format(
                 group_id, emoji, streams_concat, claims
             )
 
-        response += '\n\nMessages claimed for all groups: ' + ', '.join(
+        response += "\n\nMessages claimed for all groups: " + ", ".join(
             self.message_link.format(msg_id)
             for msg_id, in self._db.execute(self._get_claims_for_all_sql)
         )
@@ -516,77 +556,76 @@ class Group(PluginCommand, PluginThread):
 
     def _remove(
         self,
-        message: Dict[str, Any],
+        message: dict[str, Any],
         group_id: str,
-    ) -> Union[Response, Iterable[Response]]:
+    ) -> Response | Iterable[Response]:
         msg_success: bool = self._announcements_remove_group(group_id)
 
-        self._db.execute(self._remove_sql, group_id, commit = True)
+        self._db.execute(self._remove_sql, group_id, commit=True)
 
         if msg_success:
             return Response.ok(message)
 
         return Response.build_message(
-            message, 'Group removed, but removal failed for some announcement messages.'
+            message, "Group removed, but removal failed for some announcement messages."
         )
 
     def _subscribe(
-        self,
-        user_id: int,
-        group_id: str,
-        message: Optional[Dict[str, Any]] = None
-    ) -> Union[Response, Iterable[Response]]:
+        self, user_id: int, group_id: str, message: dict[str, Any] | None = None
+    ) -> Response | Iterable[Response]:
         """Subscribe a user to a group."""
         msg: str
 
         try:
-            self._db.execute(self._subscribe_user_sql, user_id, group_id, commit = True)
+            self._db.execute(self._subscribe_user_sql, user_id, group_id, commit=True)
         except IntegrityError as e:
             self.logger.exception(e)
             # User already subscribed.
-            msg = f'I think you are already subscribed to group {group_id}.'
+            msg = f"I think you are already subscribed to group {group_id}."
             if message:
                 return Response.build_message(message, msg)
             return Response.build_message(
-                message = None, content = msg, msg_type = 'private', to = [user_id]
+                message=None, content=msg, msg_type="private", to=[user_id]
             )
 
-        stream_regs: List[str] = []
+        stream_regs: list[str] = []
         for (stream_regs_str,) in self._db.execute(self._get_streams_sql, group_id):
             if not stream_regs_str:
                 continue
-            stream_regs.extend(stream_regs_str.split('\n'))
+            stream_regs.extend(stream_regs_str.split("\n"))
 
-        no_success: List[str] = self._subscribe_users_to_stream_regexes([user_id], stream_regs)
+        no_success: list[str] = self._subscribe_users_to_stream_regexes(
+            [user_id], stream_regs
+        )
 
         if not no_success:
             if message is not None:
                 return Response.ok(message)
             return Response.build_message(
-                message = None, content = f'Subscribed to group {group_id}.',
-                msg_type = 'private', to = [user_id]
+                message=None,
+                content=f"Subscribed to group {group_id}.",
+                msg_type="private",
+                to=[user_id],
             )
 
-        msg = 'Failed to subscribe you to the following streams: %s.' % str(no_success)
+        msg = "Failed to subscribe you to the following streams: %s." % str(no_success)
 
         if message is not None:
             return Response.build_message(message, msg)
         # Write a private message to the user.
         return Response.build_message(
-            message = None, content = msg, msg_type = 'private', to = [user_id]
+            message=None, content=msg, msg_type="private", to=[user_id]
         )
 
     def _subscribe_users_to_stream_regexes(
-        self,
-        user_ids: List[int],
-        stream_regs: List[str]
-    ) -> List[str]:
+        self, user_ids: list[int], stream_regs: list[str]
+    ) -> list[str]:
         """Subscribe the given group to all streams matching the regexes.
 
         Return a list of streams to which the users could not be
         subscribed.
         """
-        no_success: List[str] = []
+        no_success: list[str] = []
 
         for stream_reg in stream_regs:
             for stream in self.client().get_streams_from_regex(stream_reg):
@@ -596,39 +635,33 @@ class Group(PluginCommand, PluginThread):
         return no_success
 
     def _unannounce(
-        self,
-        message: Dict[str, Any],
-        message_id: str
-    ) -> Union[Response, Iterable[Response]]:
-        self._db.execute(self._unclaim_msg_for_all_sql, message_id, commit = True)
+        self, message: dict[str, Any], message_id: str
+    ) -> Response | Iterable[Response]:
+        self._db.execute(self._unclaim_msg_for_all_sql, message_id, commit=True)
         return Response.ok(message)
 
     def _unclaim(
-        self,
-        message: Dict[str, Any],
-        group_id: str,
-        message_id: str
-    ) -> Union[Response, Iterable[Response]]:
+        self, message: dict[str, Any], group_id: str, message_id: str
+    ) -> Response | Iterable[Response]:
         try:
             msg_id: int = int(message_id)
         except ValueError:
-            return Response.build_message(message, f'{message_id} is not an integer.')
+            return Response.build_message(message, f"{message_id} is not an integer.")
         self._db.execute(
-            self._unclaim_msg_from_group_sql, msg_id, group_id, commit = True
+            self._unclaim_msg_from_group_sql, msg_id, group_id, commit=True
         )
         return Response.ok(message)
 
     def _unsubscribe(
-        self,
-        user_id: int,
-        group_id: str,
-        message: Optional[Dict[str, Any]] = None
-    ) -> Union[Response, Iterable[Response]]:
+        self, user_id: int, group_id: str, message: dict[str, Any] | None = None
+    ) -> Response | Iterable[Response]:
         """Unsubscribe a user from a group."""
-        self._db.execute(self._unsubscribe_user_sql, user_id, group_id, commit = True)
+        self._db.execute(self._unsubscribe_user_sql, user_id, group_id, commit=True)
         if message is not None:
             return Response.ok(message)
         return Response.build_message(
-            message = None, content = f'Unsubscribed from group {group_id}.',
-            msg_type = 'private', to = [user_id]
+            message=None,
+            content=f"Unsubscribed from group {group_id}.",
+            msg_type="private",
+            to=[user_id],
         )
