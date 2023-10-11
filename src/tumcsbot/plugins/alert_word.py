@@ -16,10 +16,10 @@ from inspect import cleandoc
 from typing import Any, Iterable
 
 from tumcsbot.lib import CommandParser, DB, Regex, Response
-from tumcsbot.plugin import Event, PluginCommandMixin, PluginThread
+from tumcsbot.plugin import Event, PluginCommandMixin, PluginProcess
 
 
-class AlertWord(PluginCommandMixin, PluginThread):
+class AlertWord(PluginCommandMixin, PluginProcess):
     syntax = cleandoc(
         """
         alert_word add '<alert phrase>' <emoji>
@@ -65,6 +65,8 @@ class AlertWord(PluginCommandMixin, PluginThread):
         self._bindings: list[tuple[re.Pattern[str], str]] = self._get_bindings()
         # Replace markdown links by their textual representation.
         self._markdown_links: re.Pattern[str] = re.compile(r"\[([^\]]*)\]\([^\)]+\)")
+
+        self._received_command: bool = False
 
     def _get_bindings(self) -> list[tuple[re.Pattern[str], str]]:
         """Compile the regexes and bind them to their emojis."""
@@ -117,6 +119,10 @@ class AlertWord(PluginCommandMixin, PluginThread):
         return Response.ok(message)
 
     def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
+        if self._received_command:
+            self._received_command = False
+            return self.handle_message(event.data["message"])
+
         if not self._bindings:
             return Response.none()
 
@@ -134,6 +140,11 @@ class AlertWord(PluginCommandMixin, PluginThread):
         ]
 
     def is_responsible(self, event: Event) -> bool:
+        # First check whether the command mixin part is responsible.
+        if super().is_responsible(event):
+            self._received_command = True
+            return True
+
         # Do not react on own messages or on private messages where we
         # are not the only recipient.
         return (
