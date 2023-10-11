@@ -481,33 +481,73 @@ class CommandParser:
         return (result, [t[1:] if t[0:2] == r"\-" else t for t in tokens[index:]])
 
 
+class Conf:
+    _get_sql: str = "select Value from Conf where Key = ?"
+    _list_sql: str = "select * from Conf"
+    _remove_sql: str = "delete from Conf where Key = ?"
+    _update_sql: str = "replace into Conf values (?,?)"
+
+    def __init__(self, db: "DB | None" = None) -> None:
+        self._db: DB = DB() if db is None else db
+        self._db.checkout_table("Conf", "(Key text primary key, Value text not null)")
+
+    def get(self, key: str) -> str | None:
+        result: list[tuple[Any, ...]] = self._db.execute(self._get_sql, key)
+        if not result or len(result[0]) != 1:
+            return None
+        return result[0][0]
+
+    def list(self) -> list[tuple[str, str]]:
+        return cast(list[tuple[str, str]], self._db.execute(self._list_sql))
+
+    def remove(self, key: str) -> None:
+        self._db.execute(self._remove_sql, key, commit=True)
+
+    def set(self, key: str, value: str) -> None:
+        """Set a key.
+
+        Note that a potential exception from the database is simply
+        passed through.
+        """
+        self._db.execute(self._update_sql, key, value, commit=True)
+
+
 class DB:
     """Simple wrapper class to conveniently access a sqlite database."""
 
     path: str | None = None
 
-    def __init__(self, *args: Any, read_only: bool = False, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        db_path: str | None = None,
+        read_only: bool = False,
+        **kwargs: Any
+    ) -> None:
         """Initialize the database connection.
 
         Arguments:
         ----------
+        db_path       Overrides the global default DB path.
         read_only     Opens a read-only database connection.
 
         *args and **kwargs are forwarded to sqlite.connect().
         """
-        if not DB.path:
-            raise ValueError("no path to database given")
-        if not isabs(DB.path):
+        if not db_path:
+            if not DB.path:
+                raise ValueError("no path to database given")
+            db_path = DB.path
+        if not isabs(db_path):
             raise ValueError("path to database is not absolute")
 
         self.read_only: bool = read_only
         if self.read_only:
             kwargs.update(uri=True)
             self.connection = sqlite.connect(
-                "file:" + DB.path + "?mode=ro", *args, **kwargs
+                "file:" + db_path + "?mode=ro", *args, **kwargs
             )
         else:
-            self.connection = sqlite.connect(DB.path, *args, **kwargs)
+            self.connection = sqlite.connect(db_path, *args, **kwargs)
 
         self.cursor = self.connection.cursor()
         # Switch on foreign key support.

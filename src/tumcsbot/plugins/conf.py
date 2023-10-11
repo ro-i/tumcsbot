@@ -6,11 +6,11 @@
 from inspect import cleandoc
 from typing import Any, Iterable
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import CommandParser, Conf, Response
 from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class Conf(PluginCommandMixin, PluginThread):
+class ConfPlugin(PluginCommandMixin, PluginThread):
     syntax = cleandoc(
         """
         conf set <key> <value>
@@ -24,13 +24,9 @@ class Conf(PluginCommandMixin, PluginThread):
         [administrator/moderator rights needed]
         """
     )
-    _list_sql: str = "select * from Conf"
-    _remove_sql: str = "delete from Conf where Key = ?"
-    _update_sql: str = "replace into Conf values (?,?)"
 
     def _init_plugin(self) -> None:
-        self._db: DB = DB()
-        self._db.checkout_table("Conf", "(Key text primary key, Value text not null)")
+        self._conf: Conf = Conf()
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand("list")
         self.command_parser.add_subcommand("set", args={"key": str, "value": str})
@@ -49,17 +45,17 @@ class Conf(PluginCommandMixin, PluginThread):
 
         if command == "list":
             response: str = "Key | Value\n ---- | ----"
-            for key, value in self._db.execute(self._list_sql):
+            for key, value in self._conf.list():
                 response += f"\n{key} | {value}"
             return Response.build_message(message, response)
 
         if command == "remove":
-            self._db.execute(self._remove_sql, args.key, commit=True)
+            self._conf.remove(args.key)
             return Response.ok(message)
 
         if command == "set":
             try:
-                self._db.execute(self._update_sql, args.key, args.value, commit=True)
+                self._conf.set(args.key, args.value)
             except Exception as e:
                 self.logger.exception(e)
                 return Response.build_message(message, "Failed: %s" % str(e))

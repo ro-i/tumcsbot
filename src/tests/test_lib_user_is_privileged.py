@@ -52,4 +52,3 @@ class UserPrivilegedTest(unittest.TestCase):
             with patch.object(Client, "get_user_by_id", return_value=ret):
                 assert Client().get_user_by_id(0) == ret
                 self.assertTrue(Client().user_is_privileged(0, allow_moderator=True))
-
