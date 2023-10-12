@@ -80,7 +80,7 @@ run_func () {
 static_analysis_func () {
     _enter_venv
     # Disable some checks.
-    pylint --overgeneral-exceptions=BaseException \
+    pylint --overgeneral-exceptions=builtins.BaseException \
         --min-similarity-lines=100 \
         --no-docstring-rgx='.*' \
         --good-names-rgxs='[a-z],[a-z][a-z]' \

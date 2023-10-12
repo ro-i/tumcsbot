@@ -13,7 +13,7 @@ from tumcsbot.plugin import Event, PluginCommandMixin, PluginThread
 class Plugin(PluginCommandMixin, PluginThread):
     syntax = cleandoc(
         """
-        plugin reload <plugin>
+        plugin (reload|start|stop) <plugin>
         """
     )
     description = cleandoc(
@@ -26,6 +26,8 @@ class Plugin(PluginCommandMixin, PluginThread):
         super()._init_plugin()
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand("reload", args={"plugin": str})
+        self.command_parser.add_subcommand("start", args={"plugin": str})
+        self.command_parser.add_subcommand("stop", args={"plugin": str})
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
@@ -41,6 +43,16 @@ class Plugin(PluginCommandMixin, PluginThread):
         if command == "reload":
             self.plugin_context.push_loopback(
                 Event.reload_event(self.plugin_name(), args.plugin)
+            )
+            return Response.ok(message)
+        if command == "start":
+            self.plugin_context.push_loopback(
+                Event.start_event(self.plugin_name(), args.plugin)
+            )
+            return Response.ok(message)
+        if command == "stop":
+            self.plugin_context.push_loopback(
+                Event.stop_event(self.plugin_name(), args.plugin)
             )
             return Response.ok(message)
 

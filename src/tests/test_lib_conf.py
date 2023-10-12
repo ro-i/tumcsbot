@@ -16,7 +16,10 @@ class ConfTest(unittest.TestCase):
             conf = Conf(db=db)
 
             self.assertIsNone(conf.get("name"))
-            self.assertIsNone(conf.remove("name"))
+            try:
+                conf.remove("name")
+            except Exception as exc:
+                self.fail(f"received exception {exc}")
             self.assertEqual(conf.list(), [])
 
             conf.set("name", "foo")
@@ -27,4 +30,7 @@ class ConfTest(unittest.TestCase):
 
             conf.remove("name")
             self.assertIsNone(conf.get("name"))
-            self.assertIsNone(conf.remove("name"))
+            try:
+                conf.remove("name")
+            except Exception as exc:
+                self.fail(f"received exception {exc}")

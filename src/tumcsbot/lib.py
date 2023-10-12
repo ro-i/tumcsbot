@@ -495,7 +495,7 @@ class Conf:
         result: list[tuple[Any, ...]] = self._db.execute(self._get_sql, key)
         if not result or len(result[0]) != 1:
             return None
-        return result[0][0]
+        return cast(str, result[0][0])
 
     def list(self) -> list[tuple[str, str]]:
         return cast(list[tuple[str, str]], self._db.execute(self._list_sql))
@@ -778,7 +778,7 @@ def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Typ
     for _, module in getmembers(import_module(module_path), ismodule):
         plugin_classes.extend(
             filter(
-                lambda c: c.__module__ == module.__name__ and issubclass(c, class_type),  # type: ignore
+                lambda c: c.__module__ == module.__name__ and issubclass(c, class_type),
                 map(lambda t: t[1], getmembers(module, isclass)),  # type: ignore
             )
         )

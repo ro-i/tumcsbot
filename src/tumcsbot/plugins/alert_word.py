@@ -70,20 +70,15 @@ class AlertWord(PluginCommandMixin, PluginProcess):
 
     def _get_bindings(self) -> list[tuple[re.Pattern[str], str]]:
         """Compile the regexes and bind them to their emojis."""
-        # Get a database connection.
-        db: DB = DB()
-
         bindings: list[tuple[re.Pattern[str], str]] = []
 
         # Verify every regex and only use the valid ones.
-        for regex, emoji in db.execute(self._select_sql):
+        for regex, emoji in self._db.execute(self._select_sql):
             try:
                 pattern: re.Pattern[str] = re.compile(regex)
             except re.error:
                 continue
             bindings.append((pattern, emoji))
-
-        db.close()
 
         return bindings
 
@@ -155,3 +150,7 @@ class AlertWord(PluginCommandMixin, PluginProcess):
                 or self.client().is_only_pm_recipient(event.data["message"])
             )
         )
+
+    def reload(self) -> None:
+        self._bindings = self._get_bindings()
+        return super().reload()

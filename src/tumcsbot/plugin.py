@@ -16,6 +16,7 @@ PluginProcess   Base class for plugins that live in a separate process.
 PluginCommand   Base class tailored for interactive commands.
 """
 
+from ctypes import c_bool
 import json
 import logging
 import multiprocessing
@@ -33,6 +34,7 @@ class EventType(StrEnum):
     GET_USAGE = "get_usage"
     RET_USAGE = "ret_usage"
     RELOAD = "reload"
+    START = "start"
     STOP = "stop"
     ZULIP = "zulip"
 
@@ -81,6 +83,10 @@ class Event:
     @classmethod
     def reload_event(cls, sender: str, dest: str) -> "Event":
         return cls(sender, type=EventType.RELOAD, dest=dest)
+
+    @classmethod
+    def start_event(cls, sender: str, dest: str) -> "Event":
+        return cls(sender, type=EventType.START, dest=dest)
 
     @classmethod
     def stop_event(cls, sender: str, dest: str) -> "Event":
@@ -139,8 +145,10 @@ class _Plugin(ABC):
     _update_plugin_sql: Final[str] = "replace into Plugins values (?,?,?)"
 
     def __init__(self, plugin_context: PluginContext) -> None:
+        """Use _init_plugin for custom init code."""
+
         # Some declarations.
-        self._worker: Thread | multiprocessing.Process
+        self._worker: Thread | multiprocessing.Process | None = None
         self.queue: "queue.Queue[Event] | multiprocessing.Queue[Event]"
 
         self.plugin_context: PluginContext = plugin_context
@@ -149,7 +157,7 @@ class _Plugin(ABC):
         self.logger.handlers[0].setFormatter(fmt=logging.Formatter(LOGGING_FORMAT))
         self.logger.setLevel(plugin_context.logging_level)
         # Set the running flag.
-        self.running: bool = True
+        self.running = multiprocessing.Value(c_bool, False)
         # Set the default timeout to block the queue. (default: infinity)
         self.queue_timeout: float | None = None
         # Queue for incoming events.
@@ -198,6 +206,10 @@ class _Plugin(ABC):
         """Create a queue instance suitable for this plugin type."""
 
     @abstractmethod
+    def create_worker(self) -> Thread | multiprocessing.Process:
+        """Create a new instance for this plugin's thread/process."""
+
+    @abstractmethod
     def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
         """Process a Zulip event.
 
@@ -216,8 +228,6 @@ class _Plugin(ABC):
                 return
             responses: Response | Iterable[Response] = self.handle_zulip_event(event)
             self.client().send_responses(responses)
-        elif event.type == EventType.STOP:
-            self.stop()
         elif event.type == EventType.RELOAD:
             self.reload()
 
@@ -232,6 +242,8 @@ class _Plugin(ABC):
     @final
     def is_alive(self) -> bool:
         """Check whether the plugin is running."""
+        if self._worker is None:
+            return False
         return self._worker.is_alive()
 
     def is_responsible(self, event: Event) -> bool:
@@ -245,7 +257,8 @@ class _Plugin(ABC):
     @final
     def join(self) -> None:
         """Wait for the plugin's thread/process to terminate."""
-        self._worker.join()
+        if self._worker is not None:
+            self._worker.join()
 
     @final
     def push_event(self, event: Event) -> None:
@@ -263,7 +276,7 @@ class _Plugin(ABC):
 
         self.logger.debug("started running")
 
-        while self.running:
+        while self.running.value:  # type: ignore
             try:
                 event: Event = self.queue.get(timeout=self.queue_timeout)
             except queue.Empty:
@@ -290,6 +303,12 @@ class _Plugin(ABC):
     @final
     def start(self) -> None:
         """Start the plugin's thread/process."""
+        if self.running.value:  # type: ignore
+            self.logger.error("start failed; plugin already running")
+            return
+
+        self.running.value = True  # type: ignore
+        self._worker = self.create_worker()
         self._worker.start()
 
     @final
@@ -297,8 +316,10 @@ class _Plugin(ABC):
         """Tear the plugin down.
 
         Do not override!
+
+        Note that this does not automatically join the thread/process!
         """
-        self.running = False
+        self.running.value = False  # type: ignore
 
 
 class PluginThread(_Plugin):
@@ -307,9 +328,6 @@ class PluginThread(_Plugin):
     @final
     def __init__(self, plugin_context: PluginContext) -> None:
         _Plugin.__init__(self, plugin_context)
-        # The 'daemon'-Argument ensures that threads get
-        # terminated when the parent process terminates.
-        self._worker = Thread(target=self.run, name=self.plugin_name(), daemon=True)
 
     @final
     def clear_queues(self) -> None:
@@ -323,6 +341,12 @@ class PluginThread(_Plugin):
     def create_queue(self) -> "queue.Queue[Event]":
         return queue.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
 
+    @final
+    def create_worker(self) -> Thread:
+        # The 'daemon'-Argument ensures that threads get
+        # terminated when the parent process terminates.
+        return Thread(target=self.run, name=self.plugin_name(), daemon=True)
+
 
 class PluginProcess(_Plugin):
     """Base class for plugins that live in a separate process."""
@@ -330,11 +354,6 @@ class PluginProcess(_Plugin):
     @final
     def __init__(self, plugin_context: PluginContext) -> None:
         _Plugin.__init__(self, plugin_context)
-        # The 'daemon'-Argument ensures that subprocesses get
-        # terminated when the parent process terminates.
-        self._worker = multiprocessing.Process(
-            target=self.run, name=self.plugin_name(), daemon=True
-        )
 
     @final
     def clear_queues(self) -> None:
@@ -351,6 +370,14 @@ class PluginProcess(_Plugin):
     @final
     def create_queue(self) -> "multiprocessing.Queue[Event]":
         return multiprocessing.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
+
+    @final
+    def create_worker(self) -> multiprocessing.Process:
+        # The 'daemon'-Argument ensures that subprocesses get
+        # terminated when the parent process terminates.
+        return multiprocessing.Process(
+            target=self.run, name=self.plugin_name(), daemon=True
+        )
 
 
 class PluginCommandMixin(_Plugin):

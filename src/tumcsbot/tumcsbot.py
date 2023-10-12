@@ -123,6 +123,7 @@ class TumCSBot:
     ) -> None:
         self.events: list[str]
         self.plugins: dict[str, _Plugin] = {}
+        self.plugins_stopped: dict[str, _Plugin] = {}
         self.restart: bool = False
 
         # Init logging.
@@ -190,9 +191,11 @@ class TumCSBot:
             plugin.join()
 
     def run(self) -> None:
-        """Run the central event queue."""
-        # This queue does not only get the events from the event
-        # listener, but also loopback data from the plugins.
+        """Run the central event queue.
+
+        This queue does not only get the events from the event listener,
+        but also loopback data from the plugins.
+        """
         while True:
             event: Event = self.event_queue.get()
             logging.debug("received event %s", str(event))
@@ -207,8 +210,26 @@ class TumCSBot:
                     continue
 
             if event.dest is not None:
+                # We need special handling for the start/stop events because
+                # they operate on the thread/process workers.
                 if event.dest in self.plugins:
-                    self.plugins[event.dest].push_event(event)
+                    plugin = self.plugins[event.dest]
+                    if event.type == EventType.STOP:
+                        plugin.stop()
+                        plugin.join()
+                        self.plugins_stopped[event.dest] = self.plugins[event.dest]
+                        del self.plugins[event.dest]
+                    else:
+                        plugin.push_event(event)
+                elif event.dest in self.plugins_stopped:
+                    if event.type == EventType.START:
+                        self.plugins_stopped[event.dest].start()
+                        self.plugins[event.dest] = self.plugins_stopped[event.dest]
+                        del self.plugins_stopped[event.dest]
+                    else:
+                        logging.warn(
+                            "non-start event ignored for stopped plugin: %s", event.dest
+                        )
                 else:
                     logging.error("event.dest unknown: %s", event.dest)
                     continue

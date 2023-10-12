@@ -45,7 +45,7 @@ class Client(ZulipClient):
         """Override the constructor of the parent class."""
         super().__init__(*args, **kwargs)
         self.id: int = self.get_profile()["user_id"]
-        self.ping: str = "@**{}**".format(self.get_profile()["full_name"])
+        self.ping: str = f"@**{self.get_profile()["full_name"]}**"
         self.ping_len: int = len(self.ping)
         self.register_params: dict[str, Any] = {}
         self._db: DB = DB()
@@ -299,15 +299,9 @@ class Client(ZulipClient):
         logging.debug("event_types: %s, narrow: %s", str(event_types), str(narrow))
         return super().register(event_types, narrow, **self.register_params, **kwargs)
 
-    def send_response(
-        self, response: Response, internal: bool = False
-    ) -> dict[str, Any]:
+    def send_response(self, response: Response) -> dict[str, Any]:
         """Send one single response."""
         logging.debug("send_response: %s", str(response))
-
-        # TODO: Handle internal!
-        if internal:
-            return {}
 
         if response.message_type == MessageType.MESSAGE:
             return self.send_message(response.response)
@@ -318,7 +312,6 @@ class Client(ZulipClient):
     def send_responses(
         self,
         responses: Response | Iterable[Response | Iterable[Response]],
-        internal: bool = False,
     ) -> None:
         """Send the given responses."""
         if responses is None:
@@ -326,11 +319,11 @@ class Client(ZulipClient):
             return
 
         if not isinstance(responses, IterableClass):
-            self.send_response(responses, internal)
+            self.send_response(responses)
             return
 
         for response in responses:
-            self.send_responses(response, internal)
+            self.send_responses(response)
 
     def subscribe_all_from_stream_to_stream(
         self, from_stream: str, to_stream: str, description: str | None = None
