@@ -34,4 +34,4 @@ class Logfile(PluginCommandMixin, PluginThread):
         if result["result"] != "success":
             return Response.build_message(message, "Could not upload the logfile.")
 
-        return Response.build_message(message, f"[logfile]({result["uri"]})")
+        return Response.build_message(message, f"[logfile]({result['uri']})")

@@ -23,10 +23,8 @@ class CreateStreams(PluginCommandMixin, PluginThread):
 
         Example:
         ````text
-        create_streams "'stream without description',''" "'stream with description'\
-        ,'descriptive description'"
-        "'next useful stream with \\"quotes\\"','nice, this name-description-tuple \
-        is in a new line :)'"
+        create_streams "'stream without description',''" "'stream with description','descriptive description'"
+        "'next useful stream with \\"quotes\\"','nice, this name-description-tuple is in a new line :)'"
         ````
 
         Notes:

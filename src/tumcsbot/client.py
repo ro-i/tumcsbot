@@ -45,7 +45,7 @@ class Client(ZulipClient):
         """Override the constructor of the parent class."""
         super().__init__(*args, **kwargs)
         self.id: int = self.get_profile()["user_id"]
-        self.ping: str = f"@**{self.get_profile()["full_name"]}**"
+        self.ping: str = f"@**{self.get_profile()['full_name']}**"
         self.ping_len: int = len(self.ping)
         self.register_params: dict[str, Any] = {}
         self._db: DB = DB()
