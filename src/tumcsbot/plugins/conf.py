@@ -36,7 +36,7 @@ class ConfPlugin(PluginCommandMixin, PluginThread):
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         result = self.command_parser.parse(message["command"])
         if result is None:
@@ -56,9 +56,9 @@ class ConfPlugin(PluginCommandMixin, PluginThread):
         if command == "set":
             try:
                 self._conf.set(args.key, args.value)
-            except Exception as e:
-                self.logger.exception(e)
-                return Response.build_message(message, "Failed: %s" % str(e))
+            except Exception as exc:
+                self.logger.exception(exc)
+                return Response.build_message(message, f"Failed: {exc}")
             return Response.ok(message)
 
         return Response.command_not_found(message)

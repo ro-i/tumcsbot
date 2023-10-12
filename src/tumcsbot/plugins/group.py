@@ -200,7 +200,7 @@ class Group(PluginCommandMixin, PluginProcess):
             return self._unsubscribe(message["sender_id"], args.group_id, message)
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         if command == "list":
             return self._list(message)
@@ -532,9 +532,7 @@ class Group(PluginCommandMixin, PluginProcess):
         )
 
         for group_id, emoji, streams in self._db.execute(self._list_sql):
-            streams_concat: str = ", ".join(
-                '"{}"'.format(s) for s in streams.split("\n")
-            )
+            streams_concat: str = ", ".join(f"'{s}'" for s in streams.split("\n"))
             claims: str = ", ".join(
                 [
                     self.message_link.format(msg_id)
@@ -543,8 +541,8 @@ class Group(PluginCommandMixin, PluginProcess):
                     )
                 ]
             )
-            response += "\n{0} | {1} :{1}: | `{2}` | {3}".format(
-                group_id, emoji, streams_concat, claims
+            response += (
+                f"\n{group_id} | {emoji} :{emoji}: | `{streams_concat}` | {claims}"
             )
 
         response += "\n\nMessages claimed for all groups: " + ", ".join(
@@ -608,7 +606,7 @@ class Group(PluginCommandMixin, PluginProcess):
                 to=[user_id],
             )
 
-        msg = "Failed to subscribe you to the following streams: %s." % str(no_success)
+        msg = f"Failed to subscribe you to the following streams: {no_success}."
 
         if message is not None:
             return Response.build_message(message, msg)

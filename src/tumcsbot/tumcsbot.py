@@ -227,7 +227,7 @@ class TumCSBot:
                         self.plugins[event.dest] = self.plugins_stopped[event.dest]
                         del self.plugins_stopped[event.dest]
                     else:
-                        logging.warn(
+                        logging.warning(
                             "non-start event ignored for stopped plugin: %s", event.dest
                         )
                 else:

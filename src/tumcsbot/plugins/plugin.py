@@ -33,7 +33,7 @@ class Plugin(PluginCommandMixin, PluginThread):
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         result = self.command_parser.parse(message["command"])
         if result is None:

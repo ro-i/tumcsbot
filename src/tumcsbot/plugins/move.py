@@ -61,7 +61,7 @@ class Move(PluginCommandMixin, PluginThread):
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         if "stream_id" not in message:
             return Response.build_message(message, "Error: not in a stream.")

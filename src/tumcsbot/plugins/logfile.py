@@ -16,7 +16,7 @@ class Logfile(PluginCommandMixin, PluginThread):
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         handlers: list[logging.Handler] = logging.getLogger().handlers
         if not handlers or len(handlers) > 1:
@@ -34,4 +34,4 @@ class Logfile(PluginCommandMixin, PluginThread):
         if result["result"] != "success":
             return Response.build_message(message, "Could not upload the logfile.")
 
-        return Response.build_message(message, "[logfile]({})".format(result["uri"]))
+        return Response.build_message(message, f"[logfile]({result["uri"]})")

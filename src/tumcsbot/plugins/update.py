@@ -26,7 +26,7 @@ class Update(PluginCommandMixin, PluginThread):
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         # Get the dirname of this file (which is located in the git repo).
         git_dir: Path = Path(__file__).parent.absolute()

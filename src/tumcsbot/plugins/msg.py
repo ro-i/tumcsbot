@@ -50,7 +50,7 @@ class Msg(PluginCommandMixin, PluginThread):
         result_sql: list[tuple[Any, ...]]
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         # Get command and parameters.
         result = self.command_parser.parse(message["command"])
@@ -61,7 +61,7 @@ class Msg(PluginCommandMixin, PluginThread):
         if command == "list":
             response: str = "***List of Identifiers and Messages***\n"
             for ident, text in self._db.execute(self._list_sql):
-                response += "\n--------\nTitle: **{}**\n{}".format(ident, text)
+                response += f"\n--------\nTitle: **{ident}**\n{text}"
             return Response.build_message(message, response)
 
         # Use lowercase -> no need for case insensitivity.

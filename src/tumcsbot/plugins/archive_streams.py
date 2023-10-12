@@ -28,7 +28,7 @@ class ArchiveStreams(PluginCommandMixin, PluginThread):
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         stream_regexes: list[Any] | None = split(
             message["command"], converter=[validate_and_return_regex]
@@ -66,8 +66,7 @@ class ArchiveStreams(PluginCommandMixin, PluginThread):
                     removed += 1
 
             response.append(
-                '"%s" - found %d matching streams, removed %d'
-                % (stream_regex, len(streams), removed)
+                f"'{stream_regex}' - found {len(streams)} matching streams, removed {removed}"
             )
 
         return Response.build_message(message, "\n".join(response))

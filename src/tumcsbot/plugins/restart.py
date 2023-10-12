@@ -17,7 +17,7 @@ class Restart(PluginCommandMixin, PluginThread):
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         # Ask the parent process to restart.
         os.kill(os.getpid(), signal.SIGUSR1)

@@ -34,7 +34,7 @@ class Source(PluginCommandMixin, PluginThread):
         result_sql: list[tuple[Any, ...]]
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         try:
             if message["command"] == "list":

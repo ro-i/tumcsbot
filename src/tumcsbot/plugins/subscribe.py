@@ -120,7 +120,7 @@ class Subscribe(PluginCommandMixin, PluginThread):
         dest_stream: str,
     ) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         result: dict[str, Any] = self.client().get_users()
         if result["result"] != "success":
@@ -136,7 +136,7 @@ class Subscribe(PluginCommandMixin, PluginThread):
         self, message: dict[str, Any], dest_stream: str, streams: list[str]
     ) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         failed: list[str] = []
 

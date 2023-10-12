@@ -87,7 +87,7 @@ class AlertWord(PluginCommandMixin, PluginProcess):
         result_sql: list[tuple[Any, ...]]
 
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         # Get command and parameters.
         result = self.command_parser.parse(message["command"])
@@ -99,7 +99,7 @@ class AlertWord(PluginCommandMixin, PluginProcess):
             result_sql = self._db.execute(self._list_sql)
             response: str = "Alert word or phrase | Emoji\n---- | ----"
             for phrase, emoji in result_sql:
-                response += "\n`{0}` | {1} :{1}:".format(phrase, emoji)
+                response += f"\n`{phrase}` | {emoji} :{emoji}:"
             return Response.build_message(message, response)
 
         # Use lowercase -> no need for case insensitivity.

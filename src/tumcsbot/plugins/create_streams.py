@@ -23,8 +23,10 @@ class CreateStreams(PluginCommandMixin, PluginThread):
 
         Example:
         ````text
-        create_streams "'stream without description',''" "'stream with description','descriptive description'"
-        "'next useful stream with \\"quotes\\"','nice, this name-description-tuple is in a new line :)'"
+        create_streams "'stream without description',''" "'stream with description'\
+        ,'descriptive description'"
+        "'next useful stream with \\"quotes\\"','nice, this name-description-tuple \
+        is in a new line :)'"
         ````
 
         Notes:
@@ -35,7 +37,7 @@ class CreateStreams(PluginCommandMixin, PluginThread):
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         if not self.client().user_is_privileged(message["sender_id"]):
-            return Response.admin_err(message)
+            return Response.privilege_err(message)
 
         failed: list[str] = []
 

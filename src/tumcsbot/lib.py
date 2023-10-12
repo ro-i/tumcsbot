@@ -442,8 +442,7 @@ class CommandParser:
         if not opts_len:
             return ({}, tokens)
 
-        for index in range(len(tokens)):
-            token = tokens[index]
+        for index, token in enumerate(tokens):
             # Stop at the first non-option token.
             if token[0] != "-":
                 break
@@ -522,7 +521,7 @@ class DB:
         *args: Any,
         db_path: str | None = None,
         read_only: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         """Initialize the database connection.
 
@@ -561,10 +560,10 @@ class DB:
         table   name of the table
         schema  schema of the table in the form of
                     '(Name Type, ...)' --> valid SQL!
+
+        Since this is only for internal use, screw SQL injections :)
         """
-        self.execute(
-            "create table if not exists {} {};".format(table, schema), commit=True
-        )
+        self.execute(f"create table if not exists {table} {schema};", commit=True)
 
     def close(self) -> None:
         self.connection.close()
@@ -591,11 +590,10 @@ class DB:
 class Response:
     """Some useful methods for building a response message."""
 
-    admin_err_msg: str = cleandoc(
+    privilege_err_msg: str = cleandoc(
         """
         Hi {}!
-        You need to be administrator of this organization in order to execute \
-        this command.
+        You don't have sufficient privileges to execute this command.
         """
     )
     command_not_found_msg: str = cleandoc(
@@ -692,9 +690,7 @@ class Response:
         # see https://zulip.com/api/send-message#parameter-topic
         return cls(
             MessageType.MESSAGE,
-            dict(
-                **{"type": msg_type, "to": to, "subject": subject, "content": content}
-            ),
+            {"type": msg_type, "to": to, "subject": subject, "content": content},
         )
 
     @classmethod
@@ -706,7 +702,9 @@ class Response:
         message   The message to react on.
         emoji     The emoji to react with.
         """
-        return cls(MessageType.EMOJI, dict(message_id=message["id"], emoji_name=emoji))
+        return cls(
+            MessageType.EMOJI, {"message_id": message["id"], "emoji_name": emoji}
+        )
 
     @classmethod
     def build_reaction_from_id(cls, message_id: int, emoji: str) -> "Response":
@@ -717,19 +715,18 @@ class Response:
         message_id   The id of the message to react on.
         emoji        The emoji to react with.
         """
-        return cls(MessageType.EMOJI, dict(message_id=message_id, emoji_name=emoji))
+        return cls(MessageType.EMOJI, {"message_id": message_id, "emoji_name": emoji})
 
     @classmethod
-    def admin_err(cls, message: dict[str, Any]) -> "Response":
+    def privilege_err(cls, message: dict[str, Any]) -> "Response":
         """The user has not sufficient rights.
 
-        Tell the user that they have not administrator rights. Relevant
-        for some commands intended to be exclusively used by admins.
+        Tell the user that they have not sufficient privileges for a
+        certain command.
         """
         return cls.build_message(
-            message, cls.admin_err_msg.format(message["sender_full_name"])
+            message, cls.privilege_err_msg.format(message["sender_full_name"])
         )
-        # TODO: rename to priviledge_err and adapt message
 
     @classmethod
     def command_not_found(cls, message: dict[str, Any]) -> "Response":
@@ -777,10 +774,9 @@ def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Typ
     plugin_classes: list[Type[T]] = []
     for _, module in getmembers(import_module(module_path), ismodule):
         plugin_classes.extend(
-            filter(
-                lambda c: c.__module__ == module.__name__ and issubclass(c, class_type),
-                map(lambda t: t[1], getmembers(module, isclass)),  # type: ignore
-            )
+            value
+            for _, value in getmembers(module, isclass)
+            if value.__module__ == module.__name__ and issubclass(value, class_type)
         )
     return plugin_classes
 
