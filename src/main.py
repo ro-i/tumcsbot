@@ -31,14 +31,6 @@ def main() -> None:
         "db_path", metavar="DB_PATH", nargs=1, help="path to the bot's database"
     )
     argument_parser.add_argument(
-        "-t",
-        "--threads",
-        metavar="N",
-        type=int,
-        default=8,
-        help="maximum number of threads to use to run the plugins (default: 8)",
-    )
-    argument_parser.add_argument(
         "-d", "--debug", action="store_true", help="debugging mode switch"
     )
     argument_parser.add_argument(

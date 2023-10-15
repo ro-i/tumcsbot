@@ -13,19 +13,38 @@ a private message or a message starting with @mentioning the bot.
 import logging
 import signal
 from graphlib import TopologicalSorter
-from multiprocessing import Queue
+from multiprocessing import SimpleQueue as SimpleQueueM
+from queue import SimpleQueue as SimpleQueueT
 from threading import Thread, current_thread
-from typing import Any, Final, Iterable, Type, cast
+from typing import Any, Callable, Iterable, Type, cast
 
 from tumcsbot import lib
-from tumcsbot.client import Client
+from tumcsbot.client import Client, SharedClient
 from tumcsbot.plugin import (
     Event,
     _Plugin,
     EventType,
     PluginContext,
+    PluginProcess,
     get_zulip_events_from_plugins,
 )
+
+
+class _QueueForwarder(Thread):
+    """Forward contents of one queue to another.
+
+    Used to connect a multiprocessing queue to a regular queue.
+    """
+
+    def __init__(self, src: "SimpleQueueM[Event]", dest: "SimpleQueueT[Event]") -> None:
+        super().__init__(name="queue_forwarder", daemon=True)
+        self.src: "SimpleQueueM[Event]" = src
+        self.dest: "SimpleQueueT[Event]" = dest
+
+    def run(self) -> None:
+        while True:
+            event: Event = self.src.get()
+            self.dest.put(event)
 
 
 class _RootClient(Client):
@@ -81,10 +100,12 @@ class _ZulipEventListener(Thread):
         queue      The queue to push the preprocessed events to.
     """
 
-    def __init__(self, zuliprc: str, events: list[str], queue: "Queue[Event]") -> None:
+    def __init__(
+        self, zuliprc: str, events: list[str], queue: "SimpleQueueT[Event]"
+    ) -> None:
         super().__init__(name="zulip_event_listener", daemon=True)
         self.events: list[str] = events
-        self.queue: "Queue[Event]" = queue
+        self.queue: "SimpleQueueT[Event]" = queue
         # Init own Zulip client.
         self.client: Client = Client(config_file=zuliprc)
 
@@ -110,8 +131,6 @@ class TumCSBot:
     debug         debugging mode switch
     logfile       use LOGFILE for logging output
     """
-
-    QUEUE_LIMIT_SIZE: Final[int] = 4096
 
     def __init__(
         self,
@@ -146,23 +165,34 @@ class TumCSBot:
         # Init own Zulip client which also inits the global DB tables for all
         # Zulip client objects.
         self.client = _RootClient(config_file=zuliprc)
+        # Init Zulip client to be (potentially) shared between plugins.
+        self.shared_client = SharedClient(config_file=zuliprc)
 
-        # Init the event queue.
-        self.event_queue: "Queue[Event]" = Queue(maxsize=self.QUEUE_LIMIT_SIZE)
+        # Init the event queue. It is not a multiprocessing queue because the
+        # communication with the process plugins goes over their queues and a
+        # separate loopback queue. The loopback queue for the thread plugins
+        # simply is the central event queue.
+        # In order to deliver the events from the process loopback queue to the
+        # central event queue, too, we additionally need a small worker thread.
+        self.event_queue: "SimpleQueueT[Event]" = SimpleQueueT()
+        self.process_loopback_queue: "SimpleQueueM[Event]" = SimpleQueueM()
+        self._queue_delivery_worker: _QueueForwarder = _QueueForwarder(
+            self.process_loopback_queue, self.event_queue
+        )
+        logging.debug("start queue forward worker")
+        self._queue_delivery_worker.start()
 
-        # Register exit handler.
-        # atexit.register(self.exit_handler)
+        # Cleanup properly on SIGTERM and SIGINT.
         signal.signal(signal.SIGTERM, self.sigterm_handler)
         signal.signal(signal.SIGINT, self.sigterm_handler)
 
         # Rename main thread.
         current_thread().name = "_root"
 
-        # Get the plugin classes.
+        # Get the plugin classes and start the plugins in correct dependency order.
         plugin_classes: Iterable[Type[_Plugin]] = lib.get_classes_from_path(
             "tumcsbot.plugins", _Plugin  # type: ignore
         )
-
         self.start_plugins(plugin_classes, zuliprc, logging_level)
 
         # Get events to listen for.
@@ -263,8 +293,21 @@ class TumCSBot:
         }
         for plugin_name in TopologicalSorter(plugin_graph).static_order():
             logging.debug("start %s", plugin_name)
-            plugin: _Plugin = plugin_class_dict[plugin_name](
-                PluginContext(zuliprc, self.event_queue.put, logging_level),
+            plugin_class = plugin_class_dict[plugin_name]
+
+            push_loopback: Callable[[Event], None]
+            if issubclass(plugin_class, PluginProcess):
+                push_loopback = self.process_loopback_queue.put
+            else:
+                push_loopback = self.event_queue.put
+
+            client: SharedClient | None = None
+            if not plugin_class.need_exclusive_client:
+                client = self.shared_client
+
+            plugin: _Plugin = plugin_class(
+                plugin_context=PluginContext(zuliprc, push_loopback, logging_level),
+                client=client,
             )
             if plugin_name in self.plugins:
                 raise ValueError(f"plugin {plugin.plugin_name()} appears twice")

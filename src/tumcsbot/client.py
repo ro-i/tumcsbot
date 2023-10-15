@@ -5,8 +5,10 @@
 
 """Wrapper around Zulip's Client class."""
 
+import functools
 import logging
 import re
+from threading import RLock
 import time
 from collections.abc import Iterable as IterableClass
 from typing import cast, Any, Callable, IO, Iterable
@@ -14,6 +16,18 @@ from typing import cast, Any, Callable, IO, Iterable
 from zulip import Client as ZulipClient
 
 from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
+
+
+def synchronized(lock: RLock) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def _synchronized(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            with lock:
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return _synchronized
 
 
 class Client(ZulipClient):
@@ -27,9 +41,16 @@ class Client(ZulipClient):
     Additional Methods:
     -------------------
     get_public_stream_names   Get the names of all public streams.
+    get_raw_message           Adapt original code and add apply_markdown.
     get_streams_from_regex    Get the names of all public streams
                               matching a regex.
     get_stream_name           Get stream name for provided stream id.
+    get_user_ids_from_attribute
+        Get the user ids from a given user attribute.
+    get_user_ids_from_display_names
+        Get the user id from a user display name.
+    get_user_ids_from_emails
+        Get the user id from a user email address.
     private_stream_exists     Check if there is a private stream with
                               the given name.
     send_response             Send one single response.
@@ -419,4 +440,174 @@ class Client(ZulipClient):
             and isinstance(user["role"], int)
             and user["role"] in [100, 200]
             or (allow_moderator and user["role"] == 300)
+        )
+
+
+# This wrapper is kinda redundant, but this allows for better static analysis
+# than less verbose techniques...
+class SharedClient:
+    """A thread-safe wrapper around the Client class."""
+
+    _shared_client_lock: RLock = RLock()
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._client: Client = Client(*args, **kwargs)
+
+    @property
+    def base_url(self) -> str:
+        return self._client.base_url
+
+    @property
+    def id(self) -> int:
+        return self._client.id
+
+    @property
+    def ping(self) -> str:
+        return self._client.ping
+
+    @property
+    def ping_len(self) -> int:
+        return self._client.ping_len
+
+    @synchronized(_shared_client_lock)
+    def add_subscriptions(
+        self, streams: Iterable[dict[str, Any]], **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._client.add_subscriptions(streams=streams, **kwargs)
+
+    @synchronized(_shared_client_lock)
+    def call_endpoint(
+        self,
+        url: str | None = None,
+        method: str = "POST",
+        request: dict[str, Any] | None = None,
+        longpolling: bool = False,
+        files: list[IO[Any]] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        return self._client.call_endpoint(
+            url=url,
+            method=method,
+            request=request,
+            longpolling=longpolling,
+            files=files,
+            timeout=timeout,
+        )
+
+    @synchronized(_shared_client_lock)
+    def delete_message(self, message_id: int) -> dict[str, Any]:
+        return self._client.delete_message(message_id=message_id)
+
+    @synchronized(_shared_client_lock)
+    def delete_stream(self, stream_id: int) -> dict[str, Any]:
+        return self._client.delete_stream(stream_id=stream_id)
+
+    @synchronized(_shared_client_lock)
+    def get_messages(self, message_filters: dict[str, Any]) -> dict[str, Any]:
+        return self._client.get_messages(message_filters=message_filters)
+
+    @synchronized(_shared_client_lock)
+    def get_public_stream_names(self, use_db: bool = True) -> list[str]:
+        return self._client.get_public_stream_names(use_db=use_db)
+
+    @synchronized(_shared_client_lock)
+    def get_raw_message(
+        self, message_id: int, apply_markdown: bool = True
+    ) -> dict[str, str]:
+        return self._client.get_raw_message(
+            message_id=message_id, apply_markdown=apply_markdown
+        )
+
+    @synchronized(_shared_client_lock)
+    def get_stream_id(self, stream: str) -> dict[str, Any]:
+        return self._client.get_stream_id(stream=stream)
+
+    @synchronized(_shared_client_lock)
+    def get_stream_name(self, stream_id: int) -> str | None:
+        return self._client.get_stream_name(stream_id=stream_id)
+
+    @synchronized(_shared_client_lock)
+    def get_streams_from_regex(self, regex: str) -> list[str]:
+        return self._client.get_streams_from_regex(regex)
+
+    @synchronized(_shared_client_lock)
+    def get_user_ids_from_attribute(
+        self, attribute: str, values: Iterable[Any], case_sensitive: bool = True
+    ) -> list[int] | None:
+        return self._client.get_user_ids_from_attribute(
+            attribute=attribute, values=values, case_sensitive=case_sensitive
+        )
+
+    @synchronized(_shared_client_lock)
+    def get_user_ids_from_display_names(
+        self, display_names: Iterable[str]
+    ) -> list[int] | None:
+        return self._client.get_user_ids_from_display_names(display_names=display_names)
+
+    @synchronized(_shared_client_lock)
+    def get_user_ids_from_emails(self, emails: Iterable[str]) -> list[int] | None:
+        return self._client.get_user_ids_from_emails(emails=emails)
+
+    @synchronized(_shared_client_lock)
+    def get_users(self, request: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._client.get_users(request=request)
+
+    @synchronized(_shared_client_lock)
+    def is_only_pm_recipient(self, message: dict[str, Any]) -> bool:
+        return self._client.is_only_pm_recipient(message=message)
+
+    @synchronized(_shared_client_lock)
+    def private_stream_exists(self, stream_name: str) -> bool:
+        return self._client.private_stream_exists(stream_name=stream_name)
+
+    @synchronized(_shared_client_lock)
+    def remove_reaction(self, reaction_data: dict[str, Any]) -> dict[str, Any]:
+        return self._client.remove_reaction(reaction_data=reaction_data)
+
+    @synchronized(_shared_client_lock)
+    def send_response(self, response: Response) -> dict[str, Any]:
+        return self._client.send_response(response=response)
+
+    @synchronized(_shared_client_lock)
+    def send_responses(
+        self,
+        responses: Response | Iterable[Response | Iterable[Response]],
+    ) -> None:
+        return self._client.send_responses(responses=responses)
+
+    @synchronized(_shared_client_lock)
+    def subscribe_all_from_stream_to_stream(
+        self, from_stream: str, to_stream: str, description: str | None = None
+    ) -> bool:
+        return self._client.subscribe_all_from_stream_to_stream(
+            from_stream=from_stream, to_stream=to_stream, description=description
+        )
+
+    @synchronized(_shared_client_lock)
+    def subscribe_users(
+        self,
+        user_ids: list[int],
+        stream_name: str,
+        description: str | None = None,
+        allow_private_streams: bool = False,
+    ) -> bool:
+        return self._client.subscribe_users(
+            user_ids=user_ids,
+            stream_name=stream_name,
+            description=description,
+            allow_private_streams=allow_private_streams,
+        )
+
+    @synchronized(_shared_client_lock)
+    def update_message(self, message_data: dict[str, Any]) -> dict[str, Any]:
+        return self._client.update_message(message_data=message_data)
+
+    @synchronized(_shared_client_lock)
+    def update_stream(self, stream_data: dict[str, Any]) -> dict[str, Any]:
+        return self._client.update_stream(stream_data=stream_data)
+
+    @synchronized(_shared_client_lock)
+    def user_is_privileged(self, user_id: int, allow_moderator: bool = False) -> bool:
+        return self._client.user_is_privileged(
+            user_id=user_id, allow_moderator=allow_moderator
         )

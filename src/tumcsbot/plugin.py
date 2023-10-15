@@ -26,7 +26,7 @@ import signal
 from threading import Thread
 from typing import Any, Callable, Final, Iterable, Type, cast, final
 
-from tumcsbot.client import Client
+from tumcsbot.client import Client, SharedClient
 from tumcsbot.lib import DB, LOGGING_FORMAT, Response, StrEnum
 
 
@@ -145,18 +145,27 @@ class _Plugin(ABC):
     # List of Zulip events this plugin is responsible for.
     # See https://zulip.com/api/get-events.
     zulip_events: list[str] = []
-    # Limit the size of the incoming queues.
-    QUEUE_LIMIT_SIZE: int = 4096
     # Update the sql entry of the plugin.
     _update_plugin_sql: Final[str] = "replace into Plugins values (?,?,?)"
+    # Whether this plugin needs an own client instance or is ok with a thread-safe
+    # shared client instance. Defaults to False for PluginThreads and True for
+    # PluginProcesses.
+    need_exclusive_client: bool
 
-    def __init__(self, plugin_context: PluginContext) -> None:
+    def __init__(
+        self, plugin_context: PluginContext, client: SharedClient | None = None
+    ) -> None:
         """Use _init_plugin for custom init code."""
 
         # Some declarations.
         self._worker: Thread | multiprocessing.Process | None = None
-        self.queue: "queue.Queue[Event] | multiprocessing.Queue[Event] | None" = None
-        self._client: Client | None = None
+        self.queue: "queue.SimpleQueue[Event] | multiprocessing.SimpleQueue[Event] | None" = (
+            None
+        )
+
+        if self.need_exclusive_client != (client is None):
+            raise ValueError("wrong client initialization")
+        self._client: Client | SharedClient | None = client
 
         self.plugin_context: PluginContext = plugin_context
         # Get own logger.
@@ -165,8 +174,6 @@ class _Plugin(ABC):
         self.logger.setLevel(plugin_context.logging_level)
         # Set the running flag.
         self.running = multiprocessing.Value(c_bool, False)
-        # Set the default timeout to block the queue. (default: infinity)
-        self.queue_timeout: float | None = None
 
         # Initialize database entry for this plugin.
         self._init_db()
@@ -189,14 +196,14 @@ class _Plugin(ABC):
         return cls.__module__.rsplit(".", maxsplit=1)[-1]
 
     @property
-    def client(self) -> Client:
+    def client(self) -> Client | SharedClient:
         """Get the client object for this plugin.
 
         Return either the plugin's own client object or the globally
         shared client object.
         """
         if self._client is None:
-            raise ValueError("client attribute is only valid in worker thread")
+            raise ValueError("client attribute is only valid in worker process")
         return self._client
 
     @abstractmethod
@@ -210,7 +217,7 @@ class _Plugin(ABC):
     @abstractmethod
     def create_queue(
         self,
-    ) -> "queue.Queue[Event] | multiprocessing.Queue[Event]":
+    ) -> "queue.SimpleQueue[Event] | multiprocessing.SimpleQueue[Event]":
         """Create a queue instance suitable for this plugin type."""
 
     @abstractmethod
@@ -240,14 +247,6 @@ class _Plugin(ABC):
             self.reload()
         elif event.type == EventType.STOP:
             pass
-
-    def handle_queue_timeout(self) -> None:
-        """What to do on empty queue exception?
-
-        Per default, we reset the timeout and block until data is
-        available.
-        """
-        self.queue_timeout = None
 
     @final
     def is_alive(self) -> bool:
@@ -284,18 +283,15 @@ class _Plugin(ABC):
         on the main incoming queue and handle them.
         """
         self.logger.debug("init")
-        self._client = Client(config_file=self.plugin_context.zuliprc)
+        if self._client is None:
+            self._client = Client(config_file=self.plugin_context.zuliprc)
         self._init_plugin()
 
         self.logger.debug("started running")
         assert self.queue is not None
 
         while self.running.value:  # type: ignore
-            try:
-                event: Event = self.queue.get(timeout=self.queue_timeout)
-            except queue.Empty:
-                self.handle_queue_timeout()
-                continue
+            event: Event = self.queue.get()
 
             if event.type == EventType._EMPTY:
                 break
@@ -341,21 +337,29 @@ class _Plugin(ABC):
 class PluginThread(_Plugin):
     """Base class for plugins that live in a separate thread."""
 
+    need_exclusive_client = False
+
     @final
-    def __init__(self, plugin_context: PluginContext) -> None:
-        _Plugin.__init__(self, plugin_context)
+    def __init__(
+        self, plugin_context: PluginContext, client: SharedClient | None = None
+    ) -> None:
+        _Plugin.__init__(self, plugin_context, client)
 
     @final
     def clear_queue(self) -> None:
-        cast("queue.Queue[Event]", self.queue).queue.clear()
+        def _clear_queue(queue: "queue.SimpleQueue[Event]") -> None:
+            while not queue.empty():
+                queue.get_nowait()
+
+        _clear_queue(cast("queue.SimpleQueue[Event]", self.queue))
 
     @final
     def create_logger(self) -> logging.Logger:
         return logging.getLogger()
 
     @final
-    def create_queue(self) -> "queue.Queue[Event]":
-        return queue.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
+    def create_queue(self) -> "queue.SimpleQueue[Event]":
+        return queue.SimpleQueue()
 
     @final
     def create_worker(self) -> Thread:
@@ -367,25 +371,30 @@ class PluginThread(_Plugin):
 class PluginProcess(_Plugin):
     """Base class for plugins that live in a separate process."""
 
+    need_exclusive_client = True
+
     @final
-    def __init__(self, plugin_context: PluginContext) -> None:
-        _Plugin.__init__(self, plugin_context)
+    def __init__(
+        self, plugin_context: PluginContext, client: SharedClient | None = None
+    ) -> None:
+        _Plugin.__init__(self, plugin_context, client)
 
     @final
     def clear_queue(self) -> None:
-        def clear_queue(queue: "multiprocessing.Queue[Event]") -> None:
+        def _clear_queue(queue: "multiprocessing.SimpleQueue[Event]") -> None:
             while not queue.empty():
-                queue.get_nowait()
+                queue.get()
+            queue.close()
 
-        clear_queue(cast("multiprocessing.Queue[Event]", self.queue))
+        _clear_queue(cast("multiprocessing.SimpleQueue[Event]", self.queue))
 
     @final
     def create_logger(self) -> logging.Logger:
         return multiprocessing.log_to_stderr()
 
     @final
-    def create_queue(self) -> "multiprocessing.Queue[Event]":
-        return multiprocessing.Queue(maxsize=self.QUEUE_LIMIT_SIZE)
+    def create_queue(self) -> "multiprocessing.SimpleQueue[Event]":
+        return multiprocessing.SimpleQueue()
 
     @final
     def create_worker(self) -> multiprocessing.Process:
