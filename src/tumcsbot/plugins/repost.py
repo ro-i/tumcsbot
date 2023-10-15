@@ -41,11 +41,11 @@ class Repost(PluginThread):
 
     def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
         # Check that the reacting user has sufficient rights.
-        if not self.client().user_is_privileged(event.data["user_id"]):
+        if not self.client.user_is_privileged(event.data["user_id"]):
             return Response.none()
 
         # Get message content.
-        result: dict[str, Any] = self.client().get_raw_message(
+        result: dict[str, Any] = self.client.get_raw_message(
             event.data["message_id"], apply_markdown=False
         )
         # Verify also that the message is a stream message.
@@ -54,7 +54,7 @@ class Repost(PluginThread):
         orig_msg: dict[str, Any] = result["message"]
 
         # Remove message.
-        result = self.client().delete_message(event.data["message_id"])
+        result = self.client.delete_message(event.data["message_id"])
         if result["result"] != "success":
             return Response.none()
 

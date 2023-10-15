@@ -86,7 +86,7 @@ class AlertWord(PluginCommandMixin, PluginProcess):
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
         result_sql: list[tuple[Any, ...]]
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         # Get command and parameters.
@@ -144,10 +144,10 @@ class AlertWord(PluginCommandMixin, PluginProcess):
         # are not the only recipient.
         return (
             event.data["type"] == "message"
-            and event.data["message"]["sender_id"] != self.client().id
+            and event.data["message"]["sender_id"] != self.client.id
             and (
                 event.data["message"]["type"] == "stream"
-                or self.client().is_only_pm_recipient(event.data["message"])
+                or self.client.is_only_pm_recipient(event.data["message"])
             )
         )
 

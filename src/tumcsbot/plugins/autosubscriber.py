@@ -57,7 +57,7 @@ class AutoSubscriber(PluginThread):
                 self._handle_stream(event.data["name"], event.data["value"])
             elif event.data[
                 "property"
-            ] == "name" and not self.client().private_stream_exists(event.data["name"]):
+            ] == "name" and not self.client.private_stream_exists(event.data["name"]):
                 # Remove the previous stream name from the database.
                 self._remove_stream_from_table(event.data["name"])
                 # Add the new stream name.
@@ -80,7 +80,7 @@ class AutoSubscriber(PluginThread):
         except Exception as e:
             self.logger.exception(e)
 
-        if self.client().subscribe_users([self.client().id], stream_name):
+        if self.client.subscribe_users([self.client.id], stream_name):
             try:
                 self._db.execute(self._subscribe_sql, stream_name, commit=True)
             except Exception as e:

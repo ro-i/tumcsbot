@@ -23,7 +23,7 @@ class Ping(PluginThread):
 
     def _init_plugin(self) -> None:
         # Precompute the client id.
-        self.client_id: int = self.client().id
+        self.client_id: int = self.client.id
 
     def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
         return Response.build_reaction(event.data["message"], "wave")
@@ -41,7 +41,7 @@ class Ping(PluginThread):
                 and "mentioned" in event.data["flags"]
                 and (
                     not event.data["message"]["type"] == "private"
-                    or self.client().is_only_pm_recipient(event.data["message"])
+                    or self.client.is_only_pm_recipient(event.data["message"])
                 )
             )
         )

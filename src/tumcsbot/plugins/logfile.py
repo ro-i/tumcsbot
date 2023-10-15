@@ -15,7 +15,7 @@ class Logfile(PluginCommandMixin, PluginThread):
     description = "Get the bot's own logfile.\n[administrator/moderator rights needed]"
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         handlers: list[logging.Handler] = logging.getLogger().handlers
@@ -27,7 +27,7 @@ class Logfile(PluginCommandMixin, PluginThread):
 
         # Upload the logfile. (see https://zulip.com/api/upload-file)
         with open(handlers[0].baseFilename, "rb") as lf:
-            result: dict[str, Any] = self.client().call_endpoint(
+            result: dict[str, Any] = self.client.call_endpoint(
                 "user_uploads", method="POST", files=[lf]
             )
 

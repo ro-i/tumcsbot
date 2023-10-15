@@ -3,12 +3,10 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import os
-import signal
 from typing import Any, Iterable
 
 from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginCommandMixin, PluginThread
+from tumcsbot.plugin import Event, PluginCommandMixin, PluginThread
 
 
 class Restart(PluginCommandMixin, PluginThread):
@@ -16,11 +14,9 @@ class Restart(PluginCommandMixin, PluginThread):
     description = "Restart the bot.\n[administrator/moderator rights needed]"
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
-        # Ask the parent process to restart.
-        os.kill(os.getpid(), signal.SIGUSR1)
+        self.plugin_context.push_loopback(Event._empty_event("restart", "_root"))
 
-        # dead code
         return Response.none()

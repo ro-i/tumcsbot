@@ -22,9 +22,9 @@ class Search(PluginCommandMixin, PluginThread):
         # Fix strange behavior of Zulip which does not accept literal periods.
         search = search.replace(".", "%2E")
         # Get host url (removing trailing 'api/').
-        base_url: str = self.client().base_url[:-4]
+        base_url: str = self.client.base_url[:-4]
         # Build the full url.
         url: str = base_url + self.path + search
         # Remove requesting message.
-        self.client().delete_message(message["id"])
+        self.client.delete_message(message["id"])
         return Response.build_message(message, self.msg_template.format(url))

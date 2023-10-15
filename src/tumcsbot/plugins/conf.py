@@ -35,7 +35,7 @@ class ConfPlugin(PluginCommandMixin, PluginThread):
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         result = self.command_parser.parse(message["command"])

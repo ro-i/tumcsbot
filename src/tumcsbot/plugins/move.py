@@ -60,7 +60,7 @@ class Move(PluginCommandMixin, PluginThread):
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         if "stream_id" not in message:
@@ -114,7 +114,7 @@ class Move(PluginCommandMixin, PluginThread):
                 else []
             ),
         }
-        result = self.client().get_messages(request)
+        result = self.client.get_messages(request)
         if result["result"] != "success":
             return Response.error(message)
         if (count is not None and len(result["messages"]) < 2) or (
@@ -124,7 +124,7 @@ class Move(PluginCommandMixin, PluginThread):
         first_message: dict[str, Any] = result["messages"][0]
 
         # Get destination stream id.
-        result = self.client().get_stream_id(dest_stream)
+        result = self.client.get_stream_id(dest_stream)
         if result["result"] != "success":
             return Response.error(message)
         dest_stream_id: int = result["stream_id"]
@@ -137,15 +137,15 @@ class Move(PluginCommandMixin, PluginThread):
             "send_notification_to_old_thread": False,
             "propagate_mode": "change_later" if count is not None else "change_all",
         }
-        result = self.client().update_message(request)
+        result = self.client.update_message(request)
         if result["result"] != "success":
             return Response.error(message)
 
         # Remove requesting message.
-        self.client().delete_message(message["id"])
+        self.client.delete_message(message["id"])
 
         # Get current stream name.
-        stream_name: str | None = self.client().get_stream_name(stream_id)
+        stream_name: str | None = self.client.get_stream_name(stream_id)
         from_loc: str = (
             (stream_name if stream_name is not None else "unknown") + ">" + topic
         )

@@ -53,14 +53,10 @@ def main() -> None:
         logfile=args.logfile,
     )
 
-    try:
-        bot.run()
-    except SystemExit:
-        pass
+    bot.run()
 
     if bot.restart:
         print("Received termination request. Restarting: " + str(sys.argv))
-        bot.exit_handler()
         os.execv(sys.argv[0], sys.argv)
     else:
         print("Terminated.")

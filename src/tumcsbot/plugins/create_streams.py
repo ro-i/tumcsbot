@@ -34,7 +34,7 @@ class CreateStreams(PluginCommandMixin, PluginThread):
     )
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         failed: list[str] = []
@@ -50,7 +50,7 @@ class CreateStreams(PluginCommandMixin, PluginThread):
             if not stream:
                 failed.append("one empty stream name")
                 continue
-            result: dict[str, Any] = self.client().add_subscriptions(
+            result: dict[str, Any] = self.client.add_subscriptions(
                 streams=[{"name": stream, "description": desc}]
             )
             if result["result"] != "success":

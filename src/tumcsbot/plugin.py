@@ -13,7 +13,7 @@ PluginContext   All information a plugin may need.
 _Plugin         Abstract base class for every plugin.
 PluginThread    Base class for plugins that live in a separate thread.
 PluginProcess   Base class for plugins that live in a separate process.
-PluginCommand   Base class tailored for interactive commands.
+PluginCommandMixin   Mixin class tailored for interactive commands.
 """
 
 from ctypes import c_bool
@@ -22,6 +22,7 @@ import logging
 import multiprocessing
 import queue
 from abc import ABC, abstractmethod
+import signal
 from threading import Thread
 from typing import Any, Callable, Final, Iterable, Type, cast, final
 
@@ -37,6 +38,7 @@ class EventType(StrEnum):
     START = "start"
     STOP = "stop"
     ZULIP = "zulip"
+    _EMPTY = "_empty"
 
 
 @final
@@ -79,6 +81,10 @@ class Event:
                 "reply_to": self.reply_to,
             }
         )
+
+    @classmethod
+    def _empty_event(cls, sender: str, dest: str) -> "Event":
+        return cls(sender, type=EventType._EMPTY, dest=dest)
 
     @classmethod
     def reload_event(cls, sender: str, dest: str) -> "Event":
@@ -149,7 +155,8 @@ class _Plugin(ABC):
 
         # Some declarations.
         self._worker: Thread | multiprocessing.Process | None = None
-        self.queue: "queue.Queue[Event] | multiprocessing.Queue[Event]"
+        self.queue: "queue.Queue[Event] | multiprocessing.Queue[Event] | None" = None
+        self._client: Client | None = None
 
         self.plugin_context: PluginContext = plugin_context
         # Get own logger.
@@ -160,10 +167,6 @@ class _Plugin(ABC):
         self.running = multiprocessing.Value(c_bool, False)
         # Set the default timeout to block the queue. (default: infinity)
         self.queue_timeout: float | None = None
-        # Queue for incoming events.
-        self.queue = self.create_queue()
-
-        self._client: Client = Client(config_file=plugin_context.zuliprc)
 
         # Initialize database entry for this plugin.
         self._init_db()
@@ -174,7 +177,10 @@ class _Plugin(ABC):
         db.close()
 
     def _init_plugin(self) -> None:
-        """Custom plugin initialization code."""
+        """Custom plugin initialization code.
+
+        Note that this code is called from the worker thread/process.
+        """
 
     @final
     @classmethod
@@ -182,17 +188,19 @@ class _Plugin(ABC):
         """Do not override!"""
         return cls.__module__.rsplit(".", maxsplit=1)[-1]
 
-    @final
+    @property
     def client(self) -> Client:
         """Get the client object for this plugin.
 
         Return either the plugin's own client object or the globally
         shared client object.
         """
+        if self._client is None:
+            raise ValueError("client attribute is only valid in worker thread")
         return self._client
 
     @abstractmethod
-    def clear_queues(self) -> None:
+    def clear_queue(self) -> None:
         """Empty/clear the queues of this plugin."""
 
     @abstractmethod
@@ -227,9 +235,11 @@ class _Plugin(ABC):
             if not self.is_responsible(event):
                 return
             responses: Response | Iterable[Response] = self.handle_zulip_event(event)
-            self.client().send_responses(responses)
+            self.client.send_responses(responses)
         elif event.type == EventType.RELOAD:
             self.reload()
+        elif event.type == EventType.STOP:
+            pass
 
     def handle_queue_timeout(self) -> None:
         """What to do on empty queue exception?
@@ -262,6 +272,8 @@ class _Plugin(ABC):
 
     @final
     def push_event(self, event: Event) -> None:
+        if self.queue is None:
+            return
         self.queue.put(event)
 
     @final
@@ -272,9 +284,11 @@ class _Plugin(ABC):
         on the main incoming queue and handle them.
         """
         self.logger.debug("init")
+        self._client = Client(config_file=self.plugin_context.zuliprc)
         self._init_plugin()
 
         self.logger.debug("started running")
+        assert self.queue is not None
 
         while self.running.value:  # type: ignore
             try:
@@ -283,13 +297,16 @@ class _Plugin(ABC):
                 self.handle_queue_timeout()
                 continue
 
+            if event.type == EventType._EMPTY:
+                break
+
             self.logger.debug("received event %s", event)
             try:
                 self.handle_event(event)
             except Exception as e:
                 self.logger.exception(e)
 
-        self.clear_queues()
+        self.clear_queue()
 
         self.logger.debug("stopped running")
 
@@ -308,18 +325,17 @@ class _Plugin(ABC):
             return
 
         self.running.value = True  # type: ignore
+        self.queue = self.create_queue()
         self._worker = self.create_worker()
         self._worker.start()
 
-    @final
     def stop(self) -> None:
         """Tear the plugin down.
-
-        Do not override!
 
         Note that this does not automatically join the thread/process!
         """
         self.running.value = False  # type: ignore
+        self.push_event(Event.stop_event("", ""))
 
 
 class PluginThread(_Plugin):
@@ -330,7 +346,7 @@ class PluginThread(_Plugin):
         _Plugin.__init__(self, plugin_context)
 
     @final
-    def clear_queues(self) -> None:
+    def clear_queue(self) -> None:
         cast("queue.Queue[Event]", self.queue).queue.clear()
 
     @final
@@ -356,7 +372,7 @@ class PluginProcess(_Plugin):
         _Plugin.__init__(self, plugin_context)
 
     @final
-    def clear_queues(self) -> None:
+    def clear_queue(self) -> None:
         def clear_queue(queue: "multiprocessing.Queue[Event]") -> None:
             while not queue.empty():
                 queue.get_nowait()
@@ -373,10 +389,15 @@ class PluginProcess(_Plugin):
 
     @final
     def create_worker(self) -> multiprocessing.Process:
+        def run_wrapper() -> None:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            self.run()
+
         # The 'daemon'-Argument ensures that subprocesses get
         # terminated when the parent process terminates.
         return multiprocessing.Process(
-            target=self.run, name=self.plugin_name(), daemon=True
+            target=run_wrapper, name=self.plugin_name(), daemon=True
         )
 
 

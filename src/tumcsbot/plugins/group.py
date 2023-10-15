@@ -172,10 +172,10 @@ class Group(PluginCommandMixin, PluginProcess):
 
         # Init some usefule constants.
         self._get_emoji: re.Pattern[str] = re.compile(r"\s*:?([^:]+):?\s*")
-        self.client_id: int = self.client().id
+        self.client_id: int = self.client.id
         # (removing trailing 'api/' from host url).
         self.message_link: str = (
-            "[{0}](" + self.client().base_url[:-4] + "#narrow/id/{0})"
+            "[{0}](" + self.client.base_url[:-4] + "#narrow/id/{0})"
         )
 
     def handle_zulip_event(self, event: Event) -> Response | Iterable[Response]:
@@ -199,7 +199,7 @@ class Group(PluginCommandMixin, PluginProcess):
         if command == "unsubscribe":
             return self._unsubscribe(message["sender_id"], args.group_id, message)
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         if command == "list":
@@ -252,7 +252,7 @@ class Group(PluginCommandMixin, PluginProcess):
             # Get all user ids to subscribe to this new stream ...
             user_ids: list[int] = self._get_group_subscribers(group_ids)
             # ... and subscribe them.
-            self.client().subscribe_users(user_ids, stream["name"])
+            self.client.subscribe_users(user_ids, stream["name"])
 
         return Response.none()
 
@@ -296,10 +296,10 @@ class Group(PluginCommandMixin, PluginProcess):
         )
 
         # Remove the requesting message.
-        self.client().delete_message(message["id"])
+        self.client.delete_message(message["id"])
 
         # Send own message.
-        result: dict[str, Any] = self.client().send_response(
+        result: dict[str, Any] = self.client.send_response(
             Response.build_message(message, self._announcement_msg.format(table))
         )
         if result["result"] != "success":
@@ -318,7 +318,7 @@ class Group(PluginCommandMixin, PluginProcess):
 
         # React with all those emojis on this message.
         for emoji in map(lambda t: cast(str, t[0]), result_sql):
-            self.client().send_response(
+            self.client.send_response(
                 Response.build_reaction_from_id(result["id"], emoji)
             )
 
@@ -340,7 +340,7 @@ class Group(PluginCommandMixin, PluginProcess):
                         "\n" + to_insert + "\n*to be continued*\n\n", msg["content"]
                     )
                 ),
-                lambda msg: self.client().send_response(
+                lambda msg: self.client.send_response(
                     Response.build_reaction(msg, cast(str, emoji))
                 ),
             ]
@@ -359,7 +359,7 @@ class Group(PluginCommandMixin, PluginProcess):
         return self._do_for_all_announcement_messages(
             [
                 lambda msg: msg.update(content=pattern.sub("\n", msg["content"])),
-                lambda msg: self.client().remove_reaction(
+                lambda msg: self.client.remove_reaction(
                     {"message_id": msg["id"], "emoji_name": cast(str, emoji)}
                 ),
             ]
@@ -446,7 +446,7 @@ class Group(PluginCommandMixin, PluginProcess):
                 "num_before": 0,
                 "num_after": 1,
             }
-            result: dict[str, Any] = self.client().get_messages(request)
+            result: dict[str, Any] = self.client.get_messages(request)
             if result["result"] != "success" or not result["messages"]:
                 self.logger.warning("could not get message %s", str(request))
                 success = False
@@ -454,7 +454,7 @@ class Group(PluginCommandMixin, PluginProcess):
             msg: dict[str, Any] = result["messages"][0]
             for func in funcs:
                 func(msg)
-            result = self.client().update_message(
+            result = self.client.update_message(
                 {"message_id": msg_id, "content": msg["content"]}
             )
             if result["result"] != "success":
@@ -626,8 +626,8 @@ class Group(PluginCommandMixin, PluginProcess):
         no_success: list[str] = []
 
         for stream_reg in stream_regs:
-            for stream in self.client().get_streams_from_regex(stream_reg):
-                if not self.client().subscribe_users(user_ids, stream):
+            for stream in self.client.get_streams_from_regex(stream_reg):
+                if not self.client.subscribe_users(user_ids, stream):
                     no_success.append(stream)
 
         return no_success

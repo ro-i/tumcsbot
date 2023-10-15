@@ -10,12 +10,11 @@ It supports several commands which can be written to the bot using
 a private message or a message starting with @mentioning the bot.
 """
 
-import atexit
 import logging
 import signal
 from graphlib import TopologicalSorter
 from multiprocessing import Queue
-from threading import Thread
+from threading import Thread, current_thread
 from typing import Any, Final, Iterable, Type, cast
 
 from tumcsbot import lib
@@ -125,6 +124,7 @@ class TumCSBot:
         self.plugins: dict[str, _Plugin] = {}
         self.plugins_stopped: dict[str, _Plugin] = {}
         self.restart: bool = False
+        self.stopped: bool = False
 
         # Init logging.
         logging_level: int = logging.WARNING
@@ -143,21 +143,20 @@ class TumCSBot:
         )
         db.close()
 
-        # Init own Zulip client.
+        # Init own Zulip client which also inits the global DB tables for all
+        # Zulip client objects.
         self.client = _RootClient(config_file=zuliprc)
 
         # Init the event queue.
         self.event_queue: "Queue[Event]" = Queue(maxsize=self.QUEUE_LIMIT_SIZE)
 
         # Register exit handler.
-        atexit.register(self.exit_handler)
+        # atexit.register(self.exit_handler)
         signal.signal(signal.SIGTERM, self.sigterm_handler)
-        signal.signal(signal.SIGUSR1, self.sig_restart_handler)
+        signal.signal(signal.SIGINT, self.sigterm_handler)
 
-        # Start central worker for distributing events.
-        self._worker: Thread = Thread(target=self.run, name="_root", daemon=True)
-        logging.debug("start central queue")
-        self._worker.start()
+        # Rename main thread.
+        current_thread().name = "_root"
 
         # Get the plugin classes.
         plugin_classes: Iterable[Type[_Plugin]] = lib.get_classes_from_path(
@@ -176,19 +175,44 @@ class TumCSBot:
         logging.debug("start event listener, listening on events: %s", str(self.events))
         self._event_listener.start()
 
+    def distribute_event(self, event: Event) -> None:
+        """Distribute a given event to the appropriate plugins."""
+        if event.dest is not None:
+            # We need special handling for the start/stop events because
+            # they operate on the thread/process workers.
+            if event.dest in self.plugins:
+                if event.type == EventType.STOP:
+                    self.stop_plugin(event.dest)
+                else:
+                    self.plugins[event.dest].push_event(event)
+            elif event.dest in self.plugins_stopped:
+                if event.type == EventType.START:
+                    self.restart_plugin(event.dest)
+                else:
+                    logging.warning(
+                        "non-start event ignored for stopped plugin: %s", event.dest
+                    )
+            else:
+                logging.error("event.dest unknown: %s", event.dest)
+        else:
+            for plugin in self.plugins.values():
+                plugin.push_event(event)
+
     def exit_handler(self) -> None:
-        """Terminate all attached threads and processes.
+        """Stop the main loop if necessary."""
+        logging.debug("exit handler")
 
-        Needs to be idempotent.
-        """
-        logging.debug("try exit")
+        if not self.stopped:
+            self.stopped = True
+            self.event_queue.put(Event._empty_event("", ""))
 
-        for plugin_name, plugin in self.plugins.items():
-            if not plugin.is_alive():
-                continue
-            logging.debug("stop plugin %s ...", plugin_name)
-            plugin.push_event(Event.stop_event("_root", plugin_name))
-            plugin.join()
+    def restart_plugin(self, name: str) -> None:
+        """Restart a plugin given its name."""
+        logging.debug("restart plugin %s ...", name)
+        plugin: _Plugin = self.plugins_stopped[name]
+        plugin.start()
+        self.plugins[name] = plugin
+        del self.plugins_stopped[name]
 
     def run(self) -> None:
         """Run the central event queue.
@@ -196,53 +220,34 @@ class TumCSBot:
         This queue does not only get the events from the event listener,
         but also loopback data from the plugins.
         """
+        logging.debug("start central queue")
+
         while True:
             event: Event = self.event_queue.get()
             logging.debug("received event %s", str(event))
+
+            if self.stopped or event.type == EventType._EMPTY:
+                if event.type == EventType._EMPTY and event.sender == "restart":
+                    self.restart = True
+                self.stopped = True
+                break
 
             if event.type == EventType.ZULIP:
                 if event.data["type"] == "heartbeat":
                     continue
                 try:
                     event.data = self.zulip_event_preprocess(event.data)
-                except Exception as e:
-                    logging.exception(e)
-                    continue
+                except Exception as exc:
+                    logging.exception(exc)
 
-            if event.dest is not None:
-                # We need special handling for the start/stop events because
-                # they operate on the thread/process workers.
-                if event.dest in self.plugins:
-                    plugin = self.plugins[event.dest]
-                    if event.type == EventType.STOP:
-                        plugin.stop()
-                        plugin.join()
-                        self.plugins_stopped[event.dest] = self.plugins[event.dest]
-                        del self.plugins[event.dest]
-                    else:
-                        plugin.push_event(event)
-                elif event.dest in self.plugins_stopped:
-                    if event.type == EventType.START:
-                        self.plugins_stopped[event.dest].start()
-                        self.plugins[event.dest] = self.plugins_stopped[event.dest]
-                        del self.plugins_stopped[event.dest]
-                    else:
-                        logging.warning(
-                            "non-start event ignored for stopped plugin: %s", event.dest
-                        )
-                else:
-                    logging.error("event.dest unknown: %s", event.dest)
-                    continue
-            else:
-                for plugin in self.plugins.values():
-                    plugin.push_event(event)
+            self.distribute_event(event)
+
+        logging.debug("stopping plugins ...")
+        for plugin_name in self.plugins:
+            self.stop_plugin(plugin_name, update_plugins_dicts=False)
 
     def sigterm_handler(self, *_: Any) -> None:
-        raise SystemExit()
-
-    def sig_restart_handler(self, *_: Any) -> None:
-        self.restart = True
-        raise SystemExit()
+        self.exit_handler()
 
     def start_plugins(
         self, plugin_classes: Iterable[Type[_Plugin]], zuliprc: str, logging_level: int
@@ -265,6 +270,17 @@ class TumCSBot:
                 raise ValueError(f"plugin {plugin.plugin_name()} appears twice")
             self.plugins[plugin_name] = plugin
             plugin.start()
+
+    def stop_plugin(self, name: str, update_plugins_dicts: bool = True) -> None:
+        """Stop a plugin given its name."""
+        logging.debug("stop plugin %s ...", name)
+        plugin: _Plugin = self.plugins[name]
+        plugin.stop()
+        plugin.join()
+        if not update_plugins_dicts:
+            return
+        self.plugins_stopped[name] = plugin
+        del self.plugins[name]
 
     def zulip_event_preprocess(self, event: dict[str, Any]) -> dict[str, Any]:
         """Preprocess a Zulip event dictionary.

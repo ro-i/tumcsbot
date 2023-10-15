@@ -25,7 +25,7 @@ class Update(PluginCommandMixin, PluginThread):
     _timeout: int = 15
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         # Get the dirname of this file (which is located in the git repo).

@@ -22,7 +22,7 @@ class RenameStreams(PluginCommandMixin, PluginThread):
     )
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         failed: list[str] = []
@@ -38,13 +38,13 @@ class RenameStreams(PluginCommandMixin, PluginThread):
             line: str = f"{old} -> {new}"
 
             try:
-                old_id: int = self.client().get_stream_id(old)["stream_id"]
+                old_id: int = self.client.get_stream_id(old)["stream_id"]
             except Exception as e:
                 self.logger.exception(e)
                 failed.append(line)
                 continue
 
-            result: dict[str, Any] = self.client().update_stream(
+            result: dict[str, Any] = self.client.update_stream(
                 {"stream_id": old_id, "new_name": f"'{new}'"}
             )
             if result["result"] != "success":

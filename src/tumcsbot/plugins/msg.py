@@ -49,7 +49,7 @@ class Msg(PluginCommandMixin, PluginThread):
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
         result_sql: list[tuple[Any, ...]]
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         # Get command and parameters.
@@ -72,7 +72,7 @@ class Msg(PluginCommandMixin, PluginThread):
             if not result_sql:
                 return Response.command_not_found(message)
             # Remove requesting message.
-            self.client().delete_message(message["id"])
+            self.client.delete_message(message["id"])
             return Response.build_message(message, result_sql[0][0])
 
         if command == "add":

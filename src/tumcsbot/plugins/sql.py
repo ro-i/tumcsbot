@@ -33,7 +33,7 @@ class Source(PluginCommandMixin, PluginThread):
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         result_sql: list[tuple[Any, ...]]
 
-        if not self.client().user_is_privileged(message["sender_id"]):
+        if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
 
         try:
