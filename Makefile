@@ -12,9 +12,20 @@ args =
 run:
 	@bash -- manage.sh -v run '$(dest_dir)' $(args)
 
+# run bot in debug mode
 .PHONY: debug
 debug: args = --debug
 debug: run
+
+# run in docker
+.PHONY: docker-run
+docker-run:
+	docker compose up
+
+# run in docker in debug mode
+.PHONY: docker-debug
+docker-debug:
+	docker compose -f docker-compose.debug.yml up
 
 # remove virtual environment
 .PHONY: clean
