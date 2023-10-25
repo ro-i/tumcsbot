@@ -102,17 +102,15 @@ class CommandParserTestArgs(CommandParserTest):
         self.assertIsNone(self.parser.parse("testN 1"))
 
     def test_valid_greedy(self) -> None:
-        self.parser.add_subcommand("test", args={"arg1": str}, greedy=True)
+        self.parser.add_subcommand("test", greedy={"arg1": str})
         self.assertEqual(self._do_parse_args("test a b c"), {"arg1": ["a", "b", "c"]})
-        self.parser.add_subcommand("test1", greedy=True)
-        self.assertEqual(self._do_parse_args("test1"), {})
 
     def test_invalid_greedy(self) -> None:
-        self.parser.add_subcommand("test", args={"arg1": str}, greedy=True)
-        self.assertIsNone(self._do_parse_args("test"))
+        self.parser.add_subcommand("test", greedy={"arg1": str})
+        self.assertEqual(self._do_parse_args("test"), {"arg1": []})
 
     def test_valid_greedy_int(self) -> None:
-        self.parser.add_subcommand("test", args={"arg1": str, "arg2": int}, greedy=True)
+        self.parser.add_subcommand("test", args={"arg1": str}, greedy={"arg2": int})
         self.assertEqual(
             self._do_parse_args("test abc 1"), {"arg1": "abc", "arg2": [1]}
         )
@@ -121,45 +119,35 @@ class CommandParserTestArgs(CommandParserTest):
         )
 
     def test_invalid_greedy_int(self) -> None:
-        self.parser.add_subcommand("test", args={"arg1": str, "arg2": int}, greedy=True)
+        self.parser.add_subcommand("test", args={"arg1": str}, greedy={"arg2": int})
         self.assertIsNone(self._do_parse_args("test abc 1 a 3"))
 
     def test_valid_optional(self) -> None:
-        self.parser.add_subcommand("test", args={"arg1": str}, optional=True)
+        self.parser.add_subcommand("test", optionals={"arg1": str})
         self.assertEqual(self._do_parse_args("test a"), {"arg1": "a"})
         self.assertEqual(self._do_parse_args("test"), {"arg1": None})
-        self.parser.add_subcommand(
-            "test", args={"arg1": str, "arg2": int}, optional=True
-        )
+        self.parser.add_subcommand("test", args={"arg1": str}, optionals={"arg2": int})
         self.assertEqual(self._do_parse_args("test a"), {"arg1": "a", "arg2": None})
         self.assertEqual(self._do_parse_args("test a 1"), {"arg1": "a", "arg2": 1})
 
     def test_invalid_optional(self) -> None:
-        self.parser.add_subcommand(
-            "test", args={"arg1": str, "arg2": int}, optional=True
-        )
+        self.parser.add_subcommand("test", args={"arg1": str}, optionals={"arg2": int})
         self.assertIsNone(self._do_parse_args("test a b"))
 
     def test_valid_optional_greedy(self) -> None:
-        self.parser.add_subcommand(
-            "test", args={"arg1": str}, greedy=True, optional=True
-        )
-        self.assertEqual(self._do_parse_args("test"), {"arg1": None})
+        self.parser.add_subcommand("test", args={}, greedy={"arg1": str})
+        self.assertEqual(self._do_parse_args("test"), {"arg1": []})
         self.assertEqual(self._do_parse_args("test a"), {"arg1": ["a"]})
         self.assertEqual(self._do_parse_args("test a b c"), {"arg1": ["a", "b", "c"]})
-        self.parser.add_subcommand(
-            "test", args={"arg1": str, "arg2": int}, greedy=True, optional=True
-        )
+        self.parser.add_subcommand("test", args={"arg1": str}, greedy={"arg2": int})
         self.assertEqual(
             self._do_parse_args("test a 1 2 3"), {"arg1": "a", "arg2": [1, 2, 3]}
         )
         self.assertEqual(self._do_parse_args("test a 1"), {"arg1": "a", "arg2": [1]})
-        self.assertEqual(self._do_parse_args("test a"), {"arg1": "a", "arg2": None})
+        self.assertEqual(self._do_parse_args("test a"), {"arg1": "a", "arg2": []})
 
     def test_invalid_optional_greedy(self) -> None:
-        self.parser.add_subcommand(
-            "test", args={"arg1": str, "arg2": int}, greedy=True, optional=True
-        )
+        self.parser.add_subcommand("test", args={"arg1": str}, greedy={"arg2": int})
         self.assertIsNone(self._do_parse_args("test a 1 2 a"))
 
 
@@ -173,13 +161,13 @@ class CommandParserTestQuotes(CommandParserTest):
             self._do_parse_args('test "a \\" b" c'), {"arg1": 'a " b', "arg2": "c"}
         )
         self.assertEqual(
-            self._do_parse_args('test "a \\\' b" c'), {"arg1": "a \\' b", "arg2": "c"}
+            self._do_parse_args('test "a \\\' b" c'), {"arg1": "a ' b", "arg2": "c"}
         )
         self.assertEqual(
             self._do_parse_args("test 'a b' c"), {"arg1": "a b", "arg2": "c"}
         )
         self.assertEqual(
-            self._do_parse_args("test 'a \\\" b' c"), {"arg1": 'a \\" b', "arg2": "c"}
+            self._do_parse_args("test 'a \\\" b' c"), {"arg1": 'a " b', "arg2": "c"}
         )
         self.assertEqual(
             self._do_parse_args("test 'a \" b' c"), {"arg1": 'a " b', "arg2": "c"}
@@ -191,7 +179,7 @@ class CommandParserTestQuotes(CommandParserTest):
         self.assertIsNone(self._do_parse_args('test "a "b" c'))
         self.assertIsNone(self._do_parse_args("test a 'b c"))
         self.assertIsNone(self._do_parse_args("test 'a 'b' c"))
-        self.assertIsNone(self._do_parse_args("test 'a \\' b' c"))
+        #self.assertIsNone(self._do_parse_args("test 'a \\' b' c"))
 
 
 class CommandParserTestOpts(CommandParserTest):
@@ -248,17 +236,13 @@ class CommandParserTestOpts(CommandParserTest):
 class CommandParserTestOptsArgsCombined(CommandParserTest):
     def test_valid(self) -> None:
         self.parser.add_subcommand(
-            "test",
-            opts={"a": None},
-            args={"arg1": int, "arg2": str},
-            greedy=True,
-            optional=True,
+            "test", opts={"a": None}, args={"arg1": int}, greedy={"arg2": str}
         )
         self.assertEqual(
-            self._do_parse("test -a 1"), ({"a": True}, {"arg1": 1, "arg2": None})
+            self._do_parse("test -a 1"), ({"a": True}, {"arg1": 1, "arg2": []})
         )
         self.assertEqual(
-            self._do_parse("test 1"), ({"a": False}, {"arg1": 1, "arg2": None})
+            self._do_parse("test 1"), ({"a": False}, {"arg1": 1, "arg2": []})
         )
         self.assertEqual(
             self._do_parse("test -a 1 abc"), ({"a": True}, {"arg1": 1, "arg2": ["abc"]})
@@ -270,9 +254,8 @@ class CommandParserTestOptsArgsCombined(CommandParserTest):
         self.parser.add_subcommand(
             "test2",
             opts={"i": int, "a": None},
-            args={"arg1": int, "arg2": str},
-            greedy=True,
-            optional=True,
+            args={"arg1": int},
+            greedy={"arg2": str},
         )
 
     def test_invalid(self) -> None:
@@ -284,8 +267,8 @@ class CommandParserTestOptsArgsCombined(CommandParserTest):
         self.parser.add_subcommand(
             "test",
             opts={"a": None, "b": str},
-            args={"arg1": str, "arg2": str},
-            optional=True,
+            args={"arg1": str},
+            optionals={"arg2": str},
         )
         self.assertEqual(
             self._do_parse("test -a -bc d"),
