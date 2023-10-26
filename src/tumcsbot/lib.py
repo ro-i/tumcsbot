@@ -372,7 +372,6 @@ class CommandParser:
         Return the parsed subcommand together with its options and
         arguments. When reorder is True, arguments are matched to the argument based on structure and name instead of order.
         """
-        result_args: dict[str, Any] | None
         result_opts: tuple[dict[str, Any], list[str]] | None
 
         if not command or not self.commands:
@@ -495,7 +494,7 @@ class CommandParser:
     ) -> bool:
         try:
             value = converter(arg)
-        except Exception as e:
+        except Exception:
             return False
         if target_name in solution and isinstance(solution[target_name], type([])):
             solution[target_name].append(value)

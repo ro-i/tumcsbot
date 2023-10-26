@@ -15,7 +15,7 @@ from typing import cast, Any, Callable, IO, Iterable
 
 from zulip import Client as ZulipClient
 
-from tumcsbot.lib import stream_names_equal, DB, Response, MessageType
+from tumcsbot.lib import stream_names_equal, DB, Response, MessageType, Regex
 
 
 def synchronized(lock: RLock) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -442,6 +442,156 @@ class Client(ZulipClient):
             or (allow_moderator and user["role"] == 300)
         )
 
+    def get_user_id_by_name(self, username: str) -> int | None:
+        request = {
+            "content": username,
+        }
+
+        result = self.render_message(request)
+        if result["result"] != "success":
+            return None
+
+        match = re.search(Regex._USER_ID_PATTERN, result["rendered"])
+        if not match:
+            return None
+        return int(match.groupdict()["id"])
+
+    def get_stream_id_by_name(self, stream_name: str) -> int | None:
+        request = {
+            "content": stream_name,
+        }
+
+        result = self.render_message(request)
+        if result["result"] != "success":
+            return None
+
+        match = re.search(Regex._STREAM_ID_PATTERN, result["rendered"])
+        if not match:
+            return None
+        return int(match.groupdict()["id"])
+
+    def get_group_id_by_name(self, group_name: str) -> int | None:
+        request = {
+            "content": group_name,
+        }
+
+        result = self.render_message(request)
+        if result["result"] != "success":
+            return None
+
+        match = re.search(Regex._USER_GROUP_ID_PATTERN, result["rendered"])
+        if not match:
+            return None
+        return int(match.groupdict()["id"])
+
+    def get_stream_by_id(self, stream_id: int) -> dict[str, Any] | None:
+        stream_result = self.call_endpoint(url=f"/streams/{stream_id}", method="GET")
+
+        if stream_result["result"] != "success":
+            return None
+
+        stream_data: dict[str, Any] = stream_result["stream"]
+        return stream_data
+
+    # TODO: add these functions as soon as the zulip api allow bot requests
+    # def get_groups(self) -> list[dict[str, Any]]:
+    #     request_result = self.get_user_groups()
+    #     if request_result["result"] != "success":
+    #         return []
+    #     groups_dict: list[dict[str, Any]] = request_result["user_groups"]
+    #     return groups_dict
+    #
+    # def create_group(self, name: str, description: str) -> bool:
+    #     request = {
+    #         "name": name,
+    #         "description": description,
+    #         "members": [],
+    #     }
+    #
+    #     request_result = self.call_endpoint(
+    #         f"/user_groups/create", method="POST", request=request
+    #     )  # self.create_user_group(request)
+    #     if request_result["result"] != "success":
+    #         return False
+    #     return True
+    #
+    # def delete_group(self, identifyer: int | str) -> bool:
+    #     group_id = self._group_id_by_identifier(identifyer)
+    #
+    #     if group_id is None:
+    #         return False
+    #
+    #     request_result = self.remove_user_group(group_id)
+    #     if request_result["result"] != "success":
+    #         return False
+    #     return True
+    #
+    # def _group_id_by_identifier(self, identifyer: int | str) -> int | None:
+    #     if isinstance(identifyer, int):
+    #         return int(identifyer)
+    #     return self.get_group_id_by_name(str(identifyer))
+    #
+    # def _user_id_by_identifier(self, identifyer: int | str) -> int | None:
+    #     if isinstance(identifyer, int):
+    #         return int(identifyer)
+    #     return self.get_user_id_by_name(str(identifyer))
+    #
+    # def _update_user_group_members(
+    #     self,
+    #     user_group_identifier: int | str,
+    #     add: list[int | str],
+    #     remove: list[int | str],
+    # ) -> bool:
+    #     request = {
+    #         "delete": [self._user_id_by_identifier(u) for u in remove],
+    #         "add": [self._user_id_by_identifier(u) for u in add],
+    #     }
+    #     gid = self._group_id_by_identifier(user_group_identifier)
+    #
+    #     if gid is None:
+    #         return False
+    #
+    #     request_result = self.update_user_group_members(int(gid), request)
+    #
+    #     if request_result["result"] != "success":
+    #         return False
+    #     return True
+    #
+    # def remove_user_from_group(
+    #     self, user_identifier: int | str, group_identifier: int | str
+    # ) -> bool:
+    #     return self._update_user_group_members(group_identifier, [], [user_identifier])
+    #
+    # def add_user_to_group(
+    #     self, user_identifier: int | str, group_identifier: int | str
+    # ) -> bool:
+    #     return self._update_user_group_members(group_identifier, [user_identifier], [])
+    #
+    # def get_group_members(self, group_identifier: int | str) -> dict[str, Any] | None:
+    #     group_id: int = self._group_id_by_identifier(group_identifier)
+    #     request_result = self.call_endpoint(
+    #         f"/user_groups/{group_id}/members", method="GET"
+    #     )
+    #
+    #     if request_result["result"] != "success":
+    #         return None
+    #     members: int = request_result["members"]
+    #     return members
+    #
+    # def get_groups_for_user(self, user_identifier: int | str) -> list[int]:
+    #     result: list[int] = []
+    #     groups = self.get_groups()
+    #     uid = self._user_id_by_identifier(user_identifier)
+    #
+    #     if groups is None or uid is None:
+    #         return result
+    #
+    #     for group in groups:
+    #         members: list[int] = group["members"]
+    #         if uid in members:
+    #             result.append(group["id"])
+    #     return result
+
 
 # This wrapper is kinda redundant, but this allows for better static analysis
 # than less verbose techniques...
@@ -611,3 +761,52 @@ class SharedClient:
         return self._client.user_is_privileged(
             user_id=user_id, allow_moderator=allow_moderator
         )
+
+    @synchronized(_shared_client_lock)
+    def get_user_by_id(self, user_id: int) -> dict[str, Any]:
+        return self._client.get_user_by_id(user_id)
+
+    @synchronized(_shared_client_lock)
+    def get_user_id_by_name(self, username: str) -> int | None:
+        return self._client.get_user_id_by_name(username)
+
+    @synchronized(_shared_client_lock)
+    def get_stream_id_by_name(self, stream_name: str) -> int | None:
+        return self._client.get_stream_id_by_name(stream_name)
+
+    @synchronized(_shared_client_lock)
+    def get_stream_by_id(self, stream_id: int) -> dict[str, Any] | None:
+        return self._client.get_stream_by_id(stream_id)
+
+    # TODO: add these functions as soon as the zulip api allow bot requests
+    # @synchronized(_shared_client_lock)
+    # def get_groups(self) -> list[dict[str, Any]]:
+    #     return self._client.get_groups()
+    #
+    # @synchronized(_shared_client_lock)
+    # def create_group(self, name: str, description: str) -> bool:
+    #     return self._client.create_group(name, description)
+    #
+    # @synchronized(_shared_client_lock)
+    # def delete_group(self, identifyer: int | str) -> bool:
+    #     return self._client.delete_group(identifyer)
+    #
+    # @synchronized(_shared_client_lock)
+    # def remove_user_from_group(
+    #     self, user_identifier: int | str, group_identifier: int | str
+    # ) -> bool:
+    #     return self._client.remove_user_from_group(user_identifier, group_identifier)
+    #
+    # @synchronized(_shared_client_lock)
+    # def add_user_to_group(
+    #     self, user_identifier: int | str, group_identifier: int | str
+    # ) -> bool:
+    #     return self._client.add_user_to_group(group_identifier, user_identifier)
+    #
+    # @synchronized(_shared_client_lock)
+    # def get_groups_for_user(self, user_identifier: int | str) -> list[int]:
+    #     return self._client.get_groups_for_user(user_identifier)
+    #
+    # @synchronized(_shared_client_lock)
+    # def get_group_id_by_name(self, group_name: str) -> int | None:
+    #     return self._client.get_group_id_by_name(group_name)
