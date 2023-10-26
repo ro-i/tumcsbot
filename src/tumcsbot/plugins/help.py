@@ -85,6 +85,7 @@ class Help(PluginCommandMixin, PluginThread):
         self, message: dict[str, Any], command: str
     ) -> Response | Iterable[Response]:
         info_tuple: tuple[str, str, str] | None = None
+        self.help_info: list[tuple[str, str, str]] = self._get_help_info()
 
         for ituple in self.help_info:
             if ituple[0] == command:

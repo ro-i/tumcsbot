@@ -22,6 +22,7 @@ stream_names_equal  Decide whether two stream names are equal.
 
 import json
 import re
+import regex
 import shlex
 import sqlite3 as sqlite
 from argparse import Namespace
@@ -65,6 +66,27 @@ class MessageType(StrEnum):
 
 class Regex:
     """Some widely used regex methods."""
+
+    _USER_ARGUMENT_PATTERN = regex.compile(r"@_?\*\*.*?\*\*\s*")
+    _GROUP_ARGUMENT_PATTERN = regex.compile(r"@_?\*.*?\*\s*")
+    _STREAM_ARGUMENT_PATTERN = regex.compile(r"#\*\*.*?\*\*\s*")
+    _REACTION_ARGUMENT_PATTERN = regex.compile(r":.+:")
+
+    _USER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-user-id=\"(?P<id>\d+)\""
+    )
+    _STREAM_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-stream-id=\"(?P<id>\d+)\""
+    )
+    _USER_GROUP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-user-group-id=\"(?P<id>\d+)\""
+    )
+
+    _ARGUMENT_PATTERN = regex.compile(
+        r"(?P<args>@_?\*\*.*?\*\*\s*|@_\*.*?\*\s*|#\*\*.*?\*\*\s*|'(\\\\|\\.|.)*?'\s*|"
+        + r'"(\\\\|\\.|.)*?"\s*'
+        + r"|\S*\s*)*"
+    )
 
     _ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:\*\*)")
     _OPT_ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:{}|)".format(_ASTERISKS))
@@ -274,18 +296,20 @@ class CommandParser:
             tuple[
                 dict[str, Callable[[str], Any] | None],
                 dict[str, Callable[[str], Any]],
-                bool,
-                bool,
+                dict[str, Callable[[str], Any]],
+                dict[str, Callable[[str], Any]],
+                str | None,
             ],
         ] = {}
 
     def add_subcommand(
         self,
         name: str,
-        opts: dict[str, Callable[[str], Any] | None] | None = None,
-        args: dict[str, Callable[[str], Any]] | None = None,
-        greedy: bool = False,
-        optional: bool = False,
+        opts: dict[str, Callable[[str], Any] | None] = {},
+        args: dict[str, Callable[[str], Any]] = {},
+        optionals: dict[str, Callable[[str], Any]] = {},
+        greedy: dict[str, Callable[[str], Any]] = {},
+        description: str | None = None,
     ) -> bool:
         """Add a subcommand to the parser.
 
@@ -315,33 +339,38 @@ class CommandParser:
                    insertion order of dict keys is preserved, see
                    https://mail.python.org/pipermail/python-dev/
                    2017-December/151283.html)
-        greedy     The last argument should consume all remaining
-                   tokens of the command string (if there are any).
-                   Note that the return value for the last argument
-                   will be a list in that case.
-                   (default: False)
-        optional   The last argument is optional.
-                   (default: False)
-
+        optionals  The optional arguments to be expected as dict mapping the
+                   argument name to the function that should be used
+                   to get the argument value from the command string.
+                   (default: {})
+        greedy     The greedy arguments that can consume more than one argument to be expected
+                   as dict mapping the argument name to the function that should be used
+                   to get the argument value from the command string.
+                   (default: {})
+        description todo:
         If the given arguments would lead to a broken state of the
         parser, an IllegalCommandParserState exception is thrown.
         """
-        my_opts: dict[str, Callable[[str], Any] | None] = {}
-        my_args: dict[str, Callable[[str], Any]] = {}
         if not name:
             raise self.IllegalCommandParserState()
-        if opts is not None:
-            my_opts = opts
-        if args is not None:
-            my_args = args
-        self.commands.update({name: (my_opts, my_args, greedy, optional)})
+
+        self.commands[name] = (opts, args, optionals, greedy, description)
         return True
+
+    @staticmethod
+    def strip_quotes(s: str) -> str:
+        s = s.strip()
+        if s.startswith("'") and s.endswith("'"):
+            return s[1:-1].strip()
+        if s.startswith('"') and s.endswith('"'):
+            return s[1:-1].strip()
+        return s
 
     def parse(self, command: str | None) -> tuple[str, Opts, Args] | None:
         """Parse the given command string.
 
         Return the parsed subcommand together with its options and
-        arguments.
+        arguments. When reorder is True, arguments are matched to the argument based on structure and name instead of order.
         """
         result_args: dict[str, Any] | None
         result_opts: tuple[dict[str, Any], list[str]] | None
@@ -349,9 +378,27 @@ class CommandParser:
         if not command or not self.commands:
             return None
 
-        # Split on (any) whitespace.
-        tokens: list[str] | None = split(command)
-        if not tokens:
+        # Split on tokens.
+
+        matches_opt: regex.regex.Match[str] | None = Regex._ARGUMENT_PATTERN.match(
+            command
+        )
+        if not matches_opt:
+            return None
+
+        matches: regex.regex.Match[str] = matches_opt
+        try:
+            tokens: list[str] | None = [
+                bytes(e, "Latin-1").decode("unicode-escape")
+                for e in [
+                    CommandParser.strip_quotes(e)
+                    for e in matches.capturesdict()["args"]
+                ]
+                if e
+            ]
+        except:
+            return None
+        if not tokens or len(tokens) == 0:
             return None
 
         # Get the fitting subcommand.
@@ -359,74 +406,197 @@ class CommandParser:
         if subcommand not in self.commands:
             return None
 
-        opts, args, greedy, optional = self.commands[subcommand]
+        opts, positional, optional, greedy, descripption = self.commands[subcommand]
 
-        result_opts = self._parse_opts(opts, tokens[1:])
+        optiones_first = []
+        arguments_last = []
+
+        optarg = False
+        for t in tokens[1:]:
+            if optarg:
+                optiones_first.append(t)
+                optarg = False
+            elif t.startswith("-") and not t.startswith("--"):
+                optiones_first.append(t)
+                opt: str = t.lstrip(" -")
+                if opt in opts and opts[opt] is not None:
+                    optarg = True
+            else:
+                arguments_last.append(t)
+
+        result_opts = self._parse_opts(opts, optiones_first + arguments_last)
+
         if result_opts is None:
             return None
-        result_args = self._parse_args(args, result_opts[1], greedy, optional)
-        if result_args is None:
+
+        options = result_opts[0]
+        match_result = CommandParser._match_arguments(
+            positional, optional, greedy, result_opts[1]
+        )
+
+        if match_result is None:
             return None
 
-        return (subcommand, self.Opts(**result_opts[0]), self.Args(**result_args))
+        matched_args, remainder = match_result
 
-    def _parse_args(
-        self,
-        args: dict[str, Callable[[str], Any]],
-        tokens: list[str],
-        greedy: bool,
-        optional: bool,
-    ) -> dict[str, Any] | None:
-        """Parse postitional arguments from tokens.
-
-        Return the parsed arguments together with their converted value.
-        Return None on error.
-        """
-        result: dict[str, Any] = {}
-
-        args_len: int = len(args)
-        token_len: int = len(tokens)
-
-        if (args_len > token_len + (1 if optional else 0)) or (
-            not greedy and args_len < token_len
-        ):
+        if len(remainder) > 0:
             return None
+        return (subcommand, self.Opts(**options), self.Args(**matched_args))
 
-        name: str | None = None
-        converter: Callable[[str], Any] | None = None
+    def generate_syntax(self) -> str:
+        subcommands_str = [
+            CommandParser._format_subcommand(name, args)
+            for name, args in self.commands.items()
+        ]
+        return "Available commands:\n" + "\n\tor ".join(subcommands_str)
 
-        # Iterate over expected arguments in the correct order.
-        for token, (name, converter) in zip(tokens, args.items()):
-            try:
-                result[name] = converter(token)
-            except:
+    def generate_description(self) -> str:
+        return "\n".join(
+            [
+                f"## `{name}`\n{desc}"
+                for name, (_, _, _, _, desc) in self.commands.items()
+            ]
+        )
+
+    @staticmethod
+    def _format_subcommand(
+        name: str,
+        arguments: tuple[
+            dict[str, Callable[[Any], Any] | None],
+            dict[str, Callable[[str], Any]],
+            dict[str, Callable[[str], Any]],
+            dict[str, Callable[[str], Any]],
+            str | None,
+        ],
+    ) -> str:
+        options, positional, optional, greedy, _ = arguments
+
+        optarg: Callable[[str], str] = (
+            lambda x: " arg" if x in options and options[x] is not None else ""
+        )
+        optstr: Callable[[str], str] = lambda x: "-" if len(x) == 1 else "--"
+
+        options_strs = [f"[{optstr(o)}{o}{optarg(o)}]" for o in options]
+        optional_strs = [f"[{o}]" for o in optional]
+        arg_strs = [f"<{p}>" for p in positional]
+        greedy_strs = [f"[{g}...]" for g in greedy]
+
+        args_str = " ".join(options_strs + optional_strs + arg_strs + greedy_strs)
+        if len(args_str) > 0:
+            return f"{name} {args_str}"
+        return f"{name}"
+
+    @staticmethod
+    def _convert_argument(
+        target_name: str,
+        arg: str,
+        converter: Callable[[str], Any],
+        solution: dict[str, Any],
+    ) -> bool:
+        try:
+            value = converter(arg)
+        except Exception as e:
+            return False
+        if target_name in solution and isinstance(solution[target_name], type([])):
+            solution[target_name].append(value)
+        elif target_name not in solution or solution[target_name] is None:
+            solution.update({target_name: value})
+        else:
+            return False
+        return True
+
+    @staticmethod
+    def _match_argument_to_target(
+        target: dict[str, Any],
+        arg: str,
+        property_name: str | None,
+        solution: dict[str, Any],
+        match_config: dict[str, Callable[[str], Any]],
+    ) -> bool:
+        for target_name, converter in target.items():
+            if (
+                property_name is None
+                and len([n for n in match_config.keys() if n in target_name]) == 0
+            ):
+                if CommandParser._convert_argument(
+                    target_name, arg, converter, solution
+                ):
+                    return True
+
+            elif property_name is not None and property_name in target_name:
+                if CommandParser._convert_argument(
+                    target_name, arg, converter, solution
+                ):
+                    return True
+        return False
+
+    @staticmethod
+    def _match_arguments(
+        positional: dict[str, Any],
+        optional: dict[str, Any],
+        greedy: dict[str, Any],
+        args: list[str],
+    ) -> tuple[dict[str, Any], list[str]] | None:
+        solution: dict[str, Any] = {}
+        for key in optional:
+            solution.update({key: None})
+        for key in greedy:
+            solution.update({key: []})
+
+        remainder = {i: a for i, a in enumerate(args)}
+
+        match_config: dict[str, Callable[[str], Any]] = {
+            "user": Regex._USER_ARGUMENT_PATTERN.match,
+            # "group": Regex._GROUP_ARGUMENT_PATTERN.match,
+            "stream": Regex._STREAM_ARGUMENT_PATTERN.match,
+            "reaction": Regex._REACTION_ARGUMENT_PATTERN.match,
+        }
+        for i, arg in enumerate(args):
+            for property_name, property_func in match_config.items():
+                if property_func(arg):
+                    if CommandParser._match_argument_to_target(
+                        positional, arg, property_name, solution, match_config
+                    ):
+                        remainder.pop(i)
+                        break
+                    elif CommandParser._match_argument_to_target(
+                        optional, arg, property_name, solution, match_config
+                    ):
+                        remainder.pop(i)
+                        break
+                    elif CommandParser._match_argument_to_target(
+                        greedy, arg, property_name, solution, match_config
+                    ):
+                        remainder.pop(i)
+                        break
+
+            else:
+                if CommandParser._match_argument_to_target(
+                    positional, arg, None, solution, match_config
+                ):
+                    remainder.pop(i)
+                    continue
+                elif CommandParser._match_argument_to_target(
+                    optional, arg, None, solution, match_config
+                ):
+                    remainder.pop(i)
+                    continue
+                elif CommandParser._match_argument_to_target(
+                    greedy, arg, None, solution, match_config
+                ):
+                    remainder.pop(i)
+                    continue
+
+        for key in positional:
+            if key not in solution:
                 return None
 
-        # If greedy, consume the remaining tokens into the last argument.
-        # Check, however, if there is an optional argument that is not present.
-        if (
-            greedy
-            and not (optional and args_len > token_len)
-            and name
-            and converter is not None
-        ):
-            try:
-                rest_list: list[Any] = [converter(t) for t in tokens[args_len:]]
-                rest_list.insert(0, result[name])
-            except:
-                return None
-            result[name] = rest_list
-
-        # Fill the optional arg(s) not present with None as value.
-        # (At the moment, there is only a single optional arg.)
-        for arg in args:
-            if arg not in result:
-                result[arg] = None
-
-        return result
+        return solution, list(remainder.values())
 
     def _parse_opts(
-        self, opts: dict[str, Callable[[str], Any] | None], tokens: list[str]
+        self,
+        opts: dict[str, Callable[[Any], Any] | None],
+        tokens: list[str],
     ) -> tuple[dict[str, Any], list[str]] | None:
         """Parse options from tokens.
 
@@ -442,22 +612,36 @@ class CommandParser:
         if not opts_len:
             return ({}, tokens)
 
-        for index, token in enumerate(tokens):
+        skip_next_token = False
+        for index in range(len(tokens)):
+            if skip_next_token:
+                skip_next_token = False
+                continue
+            token = tokens[index]
             # Stop at the first non-option token.
             if token[0] != "-":
                 break
-            opt: str = token[1]
-            if opt not in opts:
+
+            opt: str
+            if token.startswith("-") and not token.startswith("--"):
+                opt = token[1]
+            else:
+                opt = token[2:]
+
+            if not opt in opts:
                 # Invalid option.
                 return None
             try:
-                converter: Callable[[str], Any] | None = opts[opt]
-                # "token[2:]" results in an empty string if there is no argument.
-                if converter is None and token[2:]:
-                    # Option does not accept any parameter.
-                    return None
+                converter: Callable[[Any], Any] | None = opts[opt]
                 if converter is not None:
-                    result[opt] = converter(token[2:])
+                    optarg: str | None
+                    if token.startswith("-") and not token.startswith("--"):
+                        optarg = token[2:]
+                    else:
+                        optarg = tokens[index + 1] if index + 1 < len(tokens) else None
+                        skip_next_token = True
+                    result[opt] = converter(optarg)
+
                 else:
                     result[opt] = True
             except:
@@ -652,7 +836,7 @@ class Response:
                        May be explicitely set to None. In this case,
                        'msg_type', 'to' (and 'subject' if 'msg_type'
                        is 'stream') have to be specified.
-        response   The content of the response.
+        content   The content of the response.
         msg_type   Determine if the response should be a stream or a
                    private message. ('stream', 'private')
                    [optional]
@@ -773,11 +957,10 @@ class Response:
 def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Type[T]]:
     plugin_classes: list[Type[T]] = []
     for _, module in getmembers(import_module(module_path), ismodule):
-        plugin_classes.extend(
-            value
-            for _, value in getmembers(module, isclass)
-            if value.__module__ == module.__name__ and issubclass(value, class_type)
-        )
+        for _, value in getmembers(module, isclass):
+            if value.__module__ == module.__name__ and issubclass(value, class_type):
+                plugin_classes.append(value)
+
     return plugin_classes
 
 

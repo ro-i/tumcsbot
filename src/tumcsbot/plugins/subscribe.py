@@ -67,27 +67,22 @@ class Subscribe(PluginCommandMixin, PluginThread):
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
             "streams",
-            args={
-                "dest_stream": Regex.get_stream_name,
-                "streams": Regex.get_stream_name,
-            },
-            greedy=True,
+            args={"dest_stream": Regex.get_stream_name},
+            greedy={"streams": Regex.get_stream_name},
         )
         self.command_parser.add_subcommand(
             "users",
-            args={
-                "dest_stream": Regex.get_stream_name,
-                "users": lambda string: Regex.get_user_name(string, get_user_id=True),
+            args={"dest_stream": Regex.get_stream_name},
+            greedy={
+                "users": lambda string: Regex.get_user_name(string, get_user_id=True)
             },
-            greedy=True,
         )
         self.command_parser.add_subcommand(
             "user_emails",
-            args={
-                "dest_stream": Regex.get_stream_name,
+            args={"dest_stream": Regex.get_stream_name},
+            greedy={
                 "user_emails": str,
             },
-            greedy=True,
         )
         self.command_parser.add_subcommand(
             "all_users", args={"dest_stream": Regex.get_stream_name}
@@ -102,10 +97,24 @@ class Subscribe(PluginCommandMixin, PluginThread):
         command, _, args = result
 
         if command == "streams":
+            if len(args.streams) == 0:
+                return Response.build_message(
+                    message, "Error: At least one argument is required for `streams`."
+                )
             return self.subscribe_streams(message, args.dest_stream, args.streams)
         if command == "users":
+            if len(args.users) == 0:
+                return Response.build_message(
+                    message, "Error: At least one argument is required for `users`."
+                )
             return self.subscribe_users(message, args.dest_stream, args.users)
         if command == "user_emails":
+            if len(args.user_emails) == 0:
+                return Response.build_message(
+                    message,
+                    "Error: At least one argument is required for `user_emails`.",
+                )
+
             return self.subscribe_user_emails(
                 message, args.dest_stream, args.user_emails
             )

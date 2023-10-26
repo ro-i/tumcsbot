@@ -5,12 +5,19 @@
 
 from typing import Final, Iterable, cast
 
-from tumcsbot.lib import DB, Response
-from tumcsbot.plugin import Event, PluginThread
+from tumcsbot.lib import DB, Response, get_classes_from_path
+from tumcsbot.plugin import Event, PluginThread, _Plugin
 
 
 class UnknownCommand(PluginThread):
     """Handle unknown commands."""
+
+    # This plugin depends on all the others because it needs their db entries.
+    dependencies = [
+        plugin_class.plugin_name()
+        for plugin_class in get_classes_from_path("tumcsbot.plugins", _Plugin)  # type: ignore
+        if plugin_class.plugin_name() != "help"
+    ]
 
     zulip_events = ["message"]
     _select_sql: Final[str] = "select name from Plugins"

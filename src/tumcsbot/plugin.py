@@ -433,6 +433,9 @@ class PluginCommandMixin(_Plugin):
         db.execute(self._update_plugin_sql, *self.get_usage(), commit=True)
         db.close()
 
+    def update_plugin_usage(self) -> None:
+        self._init_db()
+
     @final
     def get_usage(self) -> tuple[str, str, str]:
         """Get own documentation to help users use this command.

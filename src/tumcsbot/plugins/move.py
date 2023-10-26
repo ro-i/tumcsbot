@@ -53,8 +53,7 @@ class Move(PluginCommandMixin, PluginThread):
         self.command_parser.add_subcommand(
             self.plugin_name(),
             opts={"m": lambda m: int(m) if m else 1},
-            args={"dest": str},
-            greedy=True,
+            greedy={"dest": str},
         )
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
@@ -72,6 +71,11 @@ class Move(PluginCommandMixin, PluginThread):
         if result is None:
             return Response.command_not_found(message)
         _, opts, args = result
+
+        if len(args.dest) == 0:
+            return Response.build_message(
+                message, f"Error: At least one argument is required for `dest`."
+            )
 
         # TODO: discards additional spaces
         dest: tuple[str, str | None] | None = Regex.get_stream_and_topic_name(

@@ -152,15 +152,13 @@ class Group(PluginCommandMixin, PluginProcess):
         )
         self.command_parser.add_subcommand("remove", args={"group_id": str})
         self.command_parser.add_subcommand(
-            "add_streams", args={"group_id": str, "streams": str}, greedy=True
+            "add_streams", args={"group_id": str}, greedy={"streams": str}
         )
         self.command_parser.add_subcommand(
-            "remove_streams", args={"group_id": str, "streams": str}, greedy=True
+            "remove_streams", args={"group_id": str}, greedy={"streams": str}
         )
         self.command_parser.add_subcommand("list")
-        self.command_parser.add_subcommand(
-            "claim", args={"group_id": str, "text": str}, greedy=True, optional=True
-        )
+        self.command_parser.add_subcommand("claim", args={"group_id": str})
         self.command_parser.add_subcommand(
             "claim_message", args={"group_id": str, "message_id": str}
         )
@@ -223,6 +221,10 @@ class Group(PluginCommandMixin, PluginProcess):
         if command == "remove":
             return self._remove(message, args.group_id)
         if command in ["add_streams", "remove_streams"]:
+            if len(args.streams) == 0:
+                return Response.build_message(
+                    message, f"Error: At least one argument is required for `streams`."
+                )
             return self._change_streams(message, args.group_id, command, args.streams)
 
         return Response.command_not_found(message)
