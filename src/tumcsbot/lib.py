@@ -263,6 +263,35 @@ class Regex:
         return (result[0], int(result[1]))
 
 
+    @staticmethod
+    def match_user_argument(s: str) -> str:
+        if Regex._USER_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+            
+    @staticmethod
+    def match_group_argument(s: str) -> str:
+        if Regex._GROUP_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+    @staticmethod
+    def match_stream_argument(s: str) -> str:
+        if Regex._STREAM_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+    @staticmethod
+    def match_reaction_argument(s: str) -> str:
+        if Regex._REACTION_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+
 class CommandParser:
     """A simple shell-like command line parser.
 
@@ -405,7 +434,7 @@ class CommandParser:
         if subcommand not in self.commands:
             return None
 
-        opts, positional, optional, greedy, descripption = self.commands[subcommand]
+        opts, positional, optional, greedy, description = self.commands[subcommand]
 
         optiones_first = []
         arguments_last = []
@@ -508,25 +537,13 @@ class CommandParser:
     def _match_argument_to_target(
         target: dict[str, Any],
         arg: str,
-        property_name: str | None,
         solution: dict[str, Any],
-        match_config: dict[str, Callable[[str], Any]],
     ) -> bool:
         for target_name, converter in target.items():
-            if (
-                property_name is None
-                and len([n for n in match_config.keys() if n in target_name]) == 0
+            if CommandParser._convert_argument(
+                target_name, arg, converter, solution
             ):
-                if CommandParser._convert_argument(
-                    target_name, arg, converter, solution
-                ):
-                    return True
-
-            elif property_name is not None and property_name in target_name:
-                if CommandParser._convert_argument(
-                    target_name, arg, converter, solution
-                ):
-                    return True
+                return True
         return False
 
     @staticmethod
@@ -544,47 +561,24 @@ class CommandParser:
 
         remainder = {i: a for i, a in enumerate(args)}
 
-        match_config: dict[str, Callable[[str], Any]] = {
-            "user": Regex._USER_ARGUMENT_PATTERN.match,
-            # "group": Regex._GROUP_ARGUMENT_PATTERN.match,
-            "stream": Regex._STREAM_ARGUMENT_PATTERN.match,
-            "reaction": Regex._REACTION_ARGUMENT_PATTERN.match,
-        }
+        
         for i, arg in enumerate(args):
-            for property_name, property_func in match_config.items():
-                if property_func(arg):
-                    if CommandParser._match_argument_to_target(
-                        positional, arg, property_name, solution, match_config
-                    ):
-                        remainder.pop(i)
-                        break
-                    elif CommandParser._match_argument_to_target(
-                        optional, arg, property_name, solution, match_config
-                    ):
-                        remainder.pop(i)
-                        break
-                    elif CommandParser._match_argument_to_target(
-                        greedy, arg, property_name, solution, match_config
-                    ):
-                        remainder.pop(i)
-                        break
-
-            else:
-                if CommandParser._match_argument_to_target(
-                    positional, arg, None, solution, match_config
-                ):
-                    remainder.pop(i)
-                    continue
-                elif CommandParser._match_argument_to_target(
-                    optional, arg, None, solution, match_config
-                ):
-                    remainder.pop(i)
-                    continue
-                elif CommandParser._match_argument_to_target(
-                    greedy, arg, None, solution, match_config
-                ):
-                    remainder.pop(i)
-                    continue
+           
+            if CommandParser._match_argument_to_target(
+                positional, arg, solution
+            ):
+                remainder.pop(i)
+                continue
+            elif CommandParser._match_argument_to_target(
+                optional, arg, solution
+            ):
+                remainder.pop(i)
+                continue
+            elif CommandParser._match_argument_to_target(
+                greedy, arg, solution
+            ):
+                remainder.pop(i)
+                continue
 
         for key in positional:
             if key not in solution:

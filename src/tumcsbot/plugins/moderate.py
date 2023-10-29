@@ -13,7 +13,7 @@ change the alert words and specify the emojis to use for the reactions.
 from inspect import cleandoc
 from typing import Any, Iterable, Callable
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import CommandParser, DB, Response, Regex
 from tumcsbot.plugin import PluginCommandMixin, PluginThread
 from tumcsbot.plugins.moderation_reaction_handler import ModerationReactionHandler
 
@@ -237,7 +237,7 @@ class Moderate(PluginCommandMixin, PluginThread):
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
             "list",
-            optionals={"user": str},
+            optionals={"user": Regex.match_user_argument},
             opts={"a": None, "all": None, "v": None, "verbose": None},
             description=cleandoc(
                 """
@@ -259,8 +259,8 @@ class Moderate(PluginCommandMixin, PluginThread):
 
         self.command_parser.add_subcommand(
             "add",
-            args={"reaction": str, "action": Moderate.parse_action},
-            optionals={"user": str, "message": str, "description": str},
+            args={"reaction": Regex.match_reaction_argument, "action": Moderate.parse_action},
+            optionals={"user": Regex.match_user_argument, "message": str, "description": str},
             description=cleandoc(
                 """
                 Add an moderation configuration for a user.
@@ -281,8 +281,8 @@ class Moderate(PluginCommandMixin, PluginThread):
         self.command_parser.add_subcommand(
             "remove",
             optionals={
-                "user": str,
-                "reaction": str,
+                "user": Regex.match_user_argument,
+                "reaction": Regex.match_reaction_argument,
                 "action": Moderate.parse_action_or_number,
             },
             description=cleandoc(
@@ -311,7 +311,7 @@ class Moderate(PluginCommandMixin, PluginThread):
 
         self.command_parser.add_subcommand(
             "revoke",
-            optionals={"group": str, "stream": str},
+            optionals={"group": Regex.match_group_argument, "stream": Regex.match_stream_argument},
             description=cleandoc(
                 """
                 Remove authorization
@@ -324,7 +324,7 @@ class Moderate(PluginCommandMixin, PluginThread):
         defaults_str = ", ".join(set([e for e, _, _, desc in self._default_config]))
         self.command_parser.add_subcommand(
             "defaults",
-            greedy={"users": str},
+            greedy={"users": Regex.match_user_argument},
             description=cleandoc(
                 """
                 Set the actions for [

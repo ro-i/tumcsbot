@@ -13,7 +13,7 @@ change the alert words and specify the emojis to use for the reactions.
 from typing import Any, Iterable, Callable
 from inspect import cleandoc
 
-from tumcsbot.lib import CommandParser, DB, Response
+from tumcsbot.lib import CommandParser, DB, Response, Regex
 from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
@@ -47,7 +47,7 @@ class Usergroup(PluginCommandMixin, PluginThread):
         self.command_parser: CommandParser = CommandParser()
         self.command_parser.add_subcommand(
             "list",
-            optionals={"user": str},
+            optionals={"user": Regex.match_user_argument},
             opts={"a": None, "all": None},
             description=cleandoc(
                 """
@@ -70,7 +70,7 @@ class Usergroup(PluginCommandMixin, PluginThread):
         )
         self.command_parser.add_subcommand(
             "remove",
-            optionals={"user": str, "group": str},
+            optionals={"user": Regex.match_user_argument, "group": Regex.match_group_argument},
             description=cleandoc(
                 """
                 remove user from groups
@@ -81,7 +81,7 @@ class Usergroup(PluginCommandMixin, PluginThread):
         )
         self.command_parser.add_subcommand(
             "add",
-            greedy={"groups": str, "users": str},
+            greedy={"groups": Regex.match_group_argument, "users": Regex.match_user_argument},
             description=cleandoc(
                 """
                 remove users to groups
