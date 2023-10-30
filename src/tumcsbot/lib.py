@@ -262,14 +262,13 @@ class Regex:
             return (result[0], None)
         return (result[0], int(result[1]))
 
-
     @staticmethod
     def match_user_argument(s: str) -> str:
         if Regex._USER_ARGUMENT_PATTERN.match(s):
             return s
         else:
             raise ValueError()
-            
+
     @staticmethod
     def match_group_argument(s: str) -> str:
         if Regex._GROUP_ARGUMENT_PATTERN.match(s):
@@ -540,9 +539,14 @@ class CommandParser:
         solution: dict[str, Any],
     ) -> bool:
         for target_name, converter in target.items():
-            if CommandParser._convert_argument(
-                target_name, arg, converter, solution
-            ):
+            if type(converter) == type:
+                continue
+            if CommandParser._convert_argument(target_name, arg, converter, solution):
+                return True
+        for target_name, converter in target.items():
+            if type(converter) != type:
+                continue
+            if CommandParser._convert_argument(target_name, arg, converter, solution):
                 return True
         return False
 
@@ -561,22 +565,14 @@ class CommandParser:
 
         remainder = {i: a for i, a in enumerate(args)}
 
-        
         for i, arg in enumerate(args):
-           
-            if CommandParser._match_argument_to_target(
-                positional, arg, solution
-            ):
+            if CommandParser._match_argument_to_target(positional, arg, solution):
                 remainder.pop(i)
                 continue
-            elif CommandParser._match_argument_to_target(
-                optional, arg, solution
-            ):
+            elif CommandParser._match_argument_to_target(optional, arg, solution):
                 remainder.pop(i)
                 continue
-            elif CommandParser._match_argument_to_target(
-                greedy, arg, solution
-            ):
+            elif CommandParser._match_argument_to_target(greedy, arg, solution):
                 remainder.pop(i)
                 continue
 
