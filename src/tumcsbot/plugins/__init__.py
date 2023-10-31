@@ -7,4 +7,4 @@ _: Any
 
 # Import all modules to the current namespace.
 for _, _module_name, _ in _iter_modules([_dirname(__file__)]):
-    globals()[_module_name] = _import_module('.' + _module_name, package = __package__)
+    globals()[_module_name] = _import_module("." + _module_name, package=__package__)

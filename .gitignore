@@ -5,3 +5,9 @@
 *.db*
 venv
 *.log*
+.vscode/*
+bin/*
+lib/*
+lib64
+share/*
+pyvenv.cfg

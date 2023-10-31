@@ -22,6 +22,7 @@ stream_names_equal  Decide whether two stream names are equal.
 
 import json
 import re
+import regex
 import shlex
 import sqlite3 as sqlite
 from argparse import Namespace
@@ -30,18 +31,15 @@ from importlib import import_module
 from inspect import cleandoc, getmembers, isclass, ismodule
 from itertools import repeat
 from os.path import isabs
-from typing import (
-    Any, Callable, Dict, Final, Iterable, List, Match, Optional, Pattern, Tuple, Type, TypeVar,
-    Union, cast
-)
+from typing import Any, Callable, Final, Iterable, Type, TypeVar, cast
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-LOGGING_FORMAT: Final[str] = (
-    '%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s'
-)
+LOGGING_FORMAT: Final[
+    str
+] = "%(asctime)s %(processName)s %(threadName)s %(module)s %(funcName)s: %(message)s"
 
 
 class StrEnum(str, Enum):
@@ -61,57 +59,75 @@ class MessageType(StrEnum):
     NONE     No message.
     """
 
-    MESSAGE = 'message'
-    EMOJI = 'emoji'
-    NONE = 'none'
+    MESSAGE = "message"
+    EMOJI = "emoji"
+    NONE = "none"
 
 
 class Regex:
     """Some widely used regex methods."""
 
-    _ASTERISKS: Final[Pattern[str]] = re.compile(r'(?:\*\*)')
-    _OPT_ASTERISKS: Final[Pattern[str]] = re.compile(
-        r'(?:{}|)'.format(_ASTERISKS)
+    _USER_ARGUMENT_PATTERN = regex.compile(r"@_?\*\*.*?\*\*\s*")
+    _GROUP_ARGUMENT_PATTERN = regex.compile(r"@_?\*.*?\*\s*")
+    _STREAM_ARGUMENT_PATTERN = regex.compile(r"#\*\*.*?\*\*\s*")
+    _REACTION_ARGUMENT_PATTERN = regex.compile(r":.+:")
+
+    _USER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-user-id=\"(?P<id>\d+)\""
     )
-    _EMOJI: Final[Pattern[str]] = re.compile(r'[^:]+')
-    _EMOJI_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r':({}):'.format(_EMOJI.pattern)
+    _STREAM_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-stream-id=\"(?P<id>\d+)\""
     )
-    _TOPIC: Final[Pattern[str]] = re.compile(r'.+')
+    _USER_GROUP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+        r"data-user-group-id=\"(?P<id>\d+)\""
+    )
+
+    _ARGUMENT_PATTERN = regex.compile(
+        r"(?P<args>@_?\*\*.*?\*\*\s*|@_\*.*?\*\s*|#\*\*.*?\*\*\s*|'(\\\\|\\.|.)*?'\s*|"
+        + r'"(\\\\|\\.|.)*?"\s*'
+        + r"|\S*\s*)*"
+    )
+
+    _ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:\*\*)")
+    _OPT_ASTERISKS: Final[re.Pattern[str]] = re.compile(r"(?:{}|)".format(_ASTERISKS))
+    _EMOJI: Final[re.Pattern[str]] = re.compile(r"[^:]+")
+    _EMOJI_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r":({}):".format(_EMOJI.pattern)
+    )
+    _TOPIC: Final[re.Pattern[str]] = re.compile(r".+")
     # Note: Currently, there are no further restrictions on stream names posed
     # by Zulip. That is why we cannot enforce sensible restrictions here.
-    _STREAM: Final[Pattern[str]] = re.compile(r'.+')
-    _STREAM_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'#{0}({1}){0}'.format(_ASTERISKS.pattern, _STREAM.pattern)
+    _STREAM: Final[re.Pattern[str]] = re.compile(r".+")
+    _STREAM_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"#{0}({1}){0}".format(_ASTERISKS.pattern, _STREAM.pattern)
     )
-    _STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'#{0}({1})>({2}){0}'.format(_ASTERISKS.pattern, r'[^>]+', _TOPIC.pattern)
+    _STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"#{0}({1})>({2}){0}".format(_ASTERISKS.pattern, r"[^>]+", _TOPIC.pattern)
     )
-    _USER: Final[Pattern[str]] = re.compile(r'[^\*\`\\\>\"\@]+')
-    _USER_AUTOCOMPLETED_TEMPLATE: str = r'{0}({1}){0}'.format(
+    _USER: Final[re.Pattern[str]] = re.compile(r"[^\*\`\\\>\"\@]+")
+    _USER_AUTOCOMPLETED_TEMPLATE: str = r"{0}({1}){0}".format(
         _ASTERISKS.pattern, _USER.pattern
     )
-    _USER_AUTOCOMPLETED_ID_TEMPLATE: str = r'{0}({1})\|(\d+){0}'.format(
+    _USER_AUTOCOMPLETED_ID_TEMPLATE: str = r"{0}({1})\|(\d+){0}".format(
         _ASTERISKS.pattern, _USER.pattern
     )
-    _USER_LINKED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@_' + _USER_AUTOCOMPLETED_TEMPLATE
+    _USER_LINKED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@_" + _USER_AUTOCOMPLETED_TEMPLATE
     )
-    _USER_MENTIONED_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@' + _USER_AUTOCOMPLETED_TEMPLATE
+    _USER_MENTIONED_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@" + _USER_AUTOCOMPLETED_TEMPLATE
     )
-    _USER_LINKED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@_' + _USER_AUTOCOMPLETED_ID_TEMPLATE
+    _USER_LINKED_ID_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@_" + _USER_AUTOCOMPLETED_ID_TEMPLATE
     )
-    _USER_MENTIONED_ID_CAPTURE: Final[Pattern[str]] = re.compile(
-        r'@' + _USER_AUTOCOMPLETED_ID_TEMPLATE
+    _USER_MENTIONED_ID_CAPTURE: Final[re.Pattern[str]] = re.compile(
+        r"@" + _USER_AUTOCOMPLETED_ID_TEMPLATE
     )
 
     @staticmethod
     def get_captured_string_from_match(
-        match: Optional[Match[str]],
-        capture_group_id: int
-    ) -> Optional[str]:
+        match: re.Match[str] | None, capture_group_id: int
+    ) -> str | None:
         """Return the string of a capture group from a match.
 
         Return None if the match is None or if there is no capture group
@@ -127,10 +143,8 @@ class Regex:
 
     @classmethod
     def get_captured_strings_from_pattern_or(
-        cls,
-        patterns: List[Tuple[Pattern[str], List[int]]],
-        string: str
-    ) -> Optional[List[str]]:
+        cls, patterns: list[tuple[re.Pattern[str], list[int]]], string: str
+    ) -> list[str] | None:
         """Extract a substring from a string.
 
         Walk through the provided patterns, find the first that matchs
@@ -138,20 +152,20 @@ class Regex:
         the given ids.
         Return None if there has been no matching pattern.
         """
-        for (pattern, group_ids) in patterns:
-            match: Optional[Match[str]] = pattern.fullmatch(string)
+        for pattern, group_ids in patterns:
+            match: re.Match[str] | None = pattern.fullmatch(string)
             if match is None:
                 continue
-            result: List[Optional[str]] = [
+            result: list[str | None] = [
                 cls.get_captured_string_from_match(match, group_id)
                 for group_id in group_ids
             ]
-            return None if None in result else cast(List[str], result)
+            return None if None in result else cast(list[str], result)
 
         return None
 
     @classmethod
-    def get_emoji_name(cls, string: str) -> Optional[str]:
+    def get_emoji_name(cls, string: str) -> str | None:
         """Extract the emoji name from a string.
 
         Match the whole string.
@@ -161,13 +175,13 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
             [(cls._EMOJI_AUTOCOMPLETED_CAPTURE, [1]), (cls._EMOJI, [0])], string.strip()
         )
         return None if not result else result[0]
 
     @classmethod
-    def get_stream_name(cls, string: str) -> Optional[str]:
+    def get_stream_name(cls, string: str) -> str | None:
         """Extract the stream name from a string.
 
         Match the whole string.
@@ -177,13 +191,14 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
-            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])], string.strip()
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
+            [(cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]), (cls._STREAM, [0])],
+            string.strip(),
         )
         return None if not result else result[0]
 
     @classmethod
-    def get_stream_and_topic_name(cls, string: str) -> Optional[Tuple[str, Optional[str]]]:
+    def get_stream_and_topic_name(cls, string: str) -> tuple[str, str | None] | None:
         """Extract the stream and the topic name from a string.
 
         Match the whole string and try to be smart:
@@ -199,20 +214,22 @@ class Regex:
         This is related to the current behavior of the Zulip server and
         would need to be changed there.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
-            [(cls._STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE, [1, 2]),
-             (cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]),
-             (cls._STREAM, [0])],
-            string.strip()
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
+            [
+                (cls._STREAM_AND_TOPIC_AUTOCOMPLETED_CAPTURE, [1, 2]),
+                (cls._STREAM_AUTOCOMPLETED_CAPTURE, [1]),
+                (cls._STREAM, [0]),
+            ],
+            string.strip(),
         )
-        return None if not result else (result[0], result[1] if len(result) > 1 else None)
+        return (
+            None if not result else (result[0], result[1] if len(result) > 1 else None)
+        )
 
     @classmethod
     def get_user_name(
-        cls,
-        string: str,
-        get_user_id: bool = False
-    ) -> Optional[Union[str, Tuple[str, Optional[int]]]]:
+        cls, string: str, get_user_id: bool = False
+    ) -> str | tuple[str, int | None] | None:
         """Extract the user name from a string.
 
         Match the whole string.
@@ -226,15 +243,15 @@ class Regex:
         Leading/trailing whitespace is discarded.
         Return None if no match could be found.
         """
-        result: Optional[List[str]] = cls.get_captured_strings_from_pattern_or(
+        result: list[str] | None = cls.get_captured_strings_from_pattern_or(
             [
                 (cls._USER_MENTIONED_ID_CAPTURE, [1, 2]),
                 (cls._USER_LINKED_ID_CAPTURE, [1, 2]),
                 (cls._USER_MENTIONED_CAPTURE, [1]),
                 (cls._USER_LINKED_CAPTURE, [1]),
-                (cls._USER, [0])
+                (cls._USER, [0]),
             ],
-            string.strip()
+            string.strip(),
         )
         if not result:
             return None
@@ -244,6 +261,34 @@ class Regex:
             # We wanted the user ID, but did not find it.
             return (result[0], None)
         return (result[0], int(result[1]))
+
+    @staticmethod
+    def match_user_argument(s: str) -> str:
+        if Regex._USER_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+    @staticmethod
+    def match_group_argument(s: str) -> str:
+        if Regex._GROUP_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+    @staticmethod
+    def match_stream_argument(s: str) -> str:
+        if Regex._STREAM_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
+
+    @staticmethod
+    def match_reaction_argument(s: str) -> str:
+        if Regex._REACTION_ARGUMENT_PATTERN.match(s):
+            return s
+        else:
+            raise ValueError()
 
 
 class CommandParser:
@@ -263,6 +308,7 @@ class CommandParser:
        - The preceding "-" can be escaped by two backslashes in order to
          prevent the following token to be considered as option.
     """
+
     class Args(Namespace):
         pass
 
@@ -273,20 +319,25 @@ class CommandParser:
         pass
 
     def __init__(self) -> None:
-        self.commands: Dict[str, Tuple[
-            Dict[str, Optional[Callable[[str], Any]]],
-            Dict[str, Callable[[str], Any]],
-            bool,
-            bool
-        ]] = {}
+        self.commands: dict[
+            str,
+            tuple[
+                dict[str, Callable[[str], Any] | None],
+                dict[str, Callable[[str], Any]],
+                dict[str, Callable[[str], Any]],
+                dict[str, Callable[[str], Any]],
+                str | None,
+            ],
+        ] = {}
 
     def add_subcommand(
         self,
         name: str,
-        opts: Optional[Dict[str, Optional[Callable[[str], Any]]]] = None,
-        args: Optional[Dict[str, Callable[[str], Any]]] = None,
-        greedy: bool = False,
-        optional: bool = False
+        opts: dict[str, Callable[[str], Any] | None] = {},
+        args: dict[str, Callable[[str], Any]] = {},
+        optionals: dict[str, Callable[[str], Any]] = {},
+        greedy: dict[str, Callable[[str], Any]] = {},
+        description: str | None = None,
     ) -> bool:
         """Add a subcommand to the parser.
 
@@ -316,115 +367,218 @@ class CommandParser:
                    insertion order of dict keys is preserved, see
                    https://mail.python.org/pipermail/python-dev/
                    2017-December/151283.html)
-        greedy     The last argument should consume all remaining
-                   tokens of the command string (if there are any).
-                   Note that the return value for the last argument
-                   will be a list in that case.
-                   (default: False)
-        optional   The last argument is optional.
-                   (default: False)
-
+        optionals  The optional arguments to be expected as dict mapping the
+                   argument name to the function that should be used
+                   to get the argument value from the command string.
+                   (default: {})
+        greedy     The greedy arguments that can consume more than one argument to be expected
+                   as dict mapping the argument name to the function that should be used
+                   to get the argument value from the command string.
+                   (default: {})
+        description todo:
         If the given arguments would lead to a broken state of the
         parser, an IllegalCommandParserState exception is thrown.
         """
-        my_opts: Dict[str, Optional[Callable[[str], Any]]] = {}
-        my_args: Dict[str, Callable[[str], Any]] = {}
         if not name:
             raise self.IllegalCommandParserState()
-        if opts is not None:
-            my_opts = opts
-        if args is not None:
-            my_args = args
-        self.commands.update({name: (my_opts, my_args, greedy, optional)})
+
+        self.commands[name] = (opts, args, optionals, greedy, description)
         return True
 
-    def parse(self, command: Optional[str]) -> Optional[Tuple[str, Opts, Args]]:
+    @staticmethod
+    def strip_quotes(s: str) -> str:
+        s = s.strip()
+        if s.startswith("'") and s.endswith("'"):
+            return s[1:-1].strip()
+        if s.startswith('"') and s.endswith('"'):
+            return s[1:-1].strip()
+        return s
+
+    def parse(self, command: str | None) -> tuple[str, Opts, Args] | None:
         """Parse the given command string.
 
         Return the parsed subcommand together with its options and
-        arguments.
+        arguments. When reorder is True, arguments are matched to the argument based on structure and name instead of order.
         """
-        result_args: Optional[Dict[str, Any]]
-        result_opts: Optional[Tuple[Dict[str, Any], List[str]]]
+        result_opts: tuple[dict[str, Any], list[str]] | None
 
         if not command or not self.commands:
             return None
 
-        # Split on (any) whitespace.
-        tokens: Optional[List[str]] = split(command)
-        if not tokens:
+        # Split on tokens.
+
+        matches_opt: regex.regex.Match[str] | None = Regex._ARGUMENT_PATTERN.match(
+            command
+        )
+        if not matches_opt:
             return None
 
+        matches: regex.regex.Match[str] = matches_opt
+        try:
+            tokens: list[str] | None = [
+                bytes(e, "Latin-1").decode("unicode-escape")
+                for e in [
+                    CommandParser.strip_quotes(e)
+                    for e in matches.capturesdict()["args"]
+                ]
+                if e
+            ]
+        except Exception as e:
+            return None
+        if not tokens or len(tokens) == 0:
+            return None
         # Get the fitting subcommand.
         subcommand: str = tokens[0]
         if subcommand not in self.commands:
             return None
 
-        opts, args, greedy, optional = self.commands[subcommand]
+        opts, positional, optional, greedy, description = self.commands[subcommand]
 
-        result_opts = self._parse_opts(opts, tokens[1:])
+        optiones_first = []
+        arguments_last = []
+
+        optarg = False
+        for t in tokens[1:]:
+            if optarg:
+                optiones_first.append(t)
+                optarg = False
+            elif t.startswith("-") and not t.startswith("--"):
+                optiones_first.append(t)
+                opt: str = t.lstrip(" -")
+                if opt in opts and opts[opt] is not None:
+                    optarg = True
+            else:
+                arguments_last.append(t)
+
+        result_opts = self._parse_opts(opts, optiones_first + arguments_last)
+
         if result_opts is None:
             return None
-        result_args = self._parse_args(args, result_opts[1], greedy, optional)
-        if result_args is None:
+
+        options = result_opts[0]
+        match_result = CommandParser._match_arguments(
+            positional, optional, greedy, result_opts[1]
+        )
+
+        if match_result is None:
             return None
 
-        return (subcommand, self.Opts(**result_opts[0]), self.Args(**result_args))
+        matched_args, remainder = match_result
 
-    def _parse_args(
-        self,
-        args: Dict[str, Callable[[str], Any]],
-        tokens: List[str],
-        greedy: bool,
-        optional: bool
-    ) -> Optional[Dict[str, Any]]:
-        """Parse postitional arguments from tokens.
-
-        Return the parsed arguments together with their converted value.
-        Return None on error.
-        """
-        result: Dict[str, Any] = {}
-
-        args_len: int = len(args)
-        token_len: int = len(tokens)
-
-        if ((args_len > token_len + (1 if optional else 0))
-                or (not greedy and args_len < token_len)):
+        if len(remainder) > 0:
             return None
+        return (subcommand, self.Opts(**options), self.Args(**matched_args))
 
-        name: Optional[str] = None
-        converter: Optional[Callable[[str], Any]] = None
+    def generate_syntax(self) -> str:
+        subcommands_str = [
+            CommandParser._format_subcommand(name, args)
+            for name, args in self.commands.items()
+        ]
+        return "Available commands:\n" + "\n\tor ".join(subcommands_str)
 
-        # Iterate over expected arguments in the correct order.
-        for token, (name, converter) in zip(tokens, args.items()):
-            try:
-                result[name] = converter(token)
-            except:
+    def generate_description(self) -> str:
+        return "\n".join(
+            [
+                f"## `{name}`\n{desc}"
+                for name, (_, _, _, _, desc) in self.commands.items()
+            ]
+        )
+
+    @staticmethod
+    def _format_subcommand(
+        name: str,
+        arguments: tuple[
+            dict[str, Callable[[Any], Any] | None],
+            dict[str, Callable[[str], Any]],
+            dict[str, Callable[[str], Any]],
+            dict[str, Callable[[str], Any]],
+            str | None,
+        ],
+    ) -> str:
+        options, positional, optional, greedy, _ = arguments
+
+        optarg: Callable[[str], str] = (
+            lambda x: " arg" if x in options and options[x] is not None else ""
+        )
+        optstr: Callable[[str], str] = lambda x: "-" if len(x) == 1 else "--"
+
+        options_strs = [f"[{optstr(o)}{o}{optarg(o)}]" for o in options]
+        optional_strs = [f"[{o}]" for o in optional]
+        arg_strs = [f"<{p}>" for p in positional]
+        greedy_strs = [f"[{g}...]" for g in greedy]
+
+        args_str = " ".join(options_strs + optional_strs + arg_strs + greedy_strs)
+        if len(args_str) > 0:
+            return f"{name} {args_str}"
+        return f"{name}"
+
+    @staticmethod
+    def _convert_argument(
+        target_name: str,
+        arg: str,
+        converter: Callable[[str], Any],
+        solution: dict[str, Any],
+    ) -> bool:
+        try:
+            value = converter(arg)
+        except Exception:
+            return False
+        if target_name in solution and isinstance(solution[target_name], type([])):
+            solution[target_name].append(value)
+        elif target_name not in solution or solution[target_name] is None:
+            solution.update({target_name: value})
+        else:
+            return False
+        return True
+
+    @staticmethod
+    def _match_argument_to_target(
+        target: dict[str, Any],
+        arg: str,
+        solution: dict[str, Any],
+    ) -> bool:
+        for target_name, converter in target.items():
+            if CommandParser._convert_argument(target_name, arg, converter, solution):
+                return True
+        return False
+
+    @staticmethod
+    def _match_arguments(
+        positional: dict[str, Any],
+        optional: dict[str, Any],
+        greedy: dict[str, Any],
+        args: list[str],
+    ) -> tuple[dict[str, Any], list[str]] | None:
+        solution: dict[str, Any] = {}
+        for key in optional:
+            solution.update({key: None})
+        for key in greedy:
+            solution.update({key: []})
+
+        remainder = {i: a for i, a in enumerate(args)}
+
+        for i, arg in enumerate(args):
+            if CommandParser._match_argument_to_target(positional, arg, solution):
+                remainder.pop(i)
+                continue
+            elif CommandParser._match_argument_to_target(optional, arg, solution):
+                remainder.pop(i)
+                continue
+            elif CommandParser._match_argument_to_target(greedy, arg, solution):
+                remainder.pop(i)
+                continue
+
+        for key in positional:
+            if key not in solution:
                 return None
 
-        # If greedy, consume the remaining tokens into the last argument.
-        # Check, however, if there is an optional argument that is not present.
-        if greedy and not (optional and args_len > token_len) and name and converter:
-            try:
-                rest_list: List[Any] = [converter(t) for t in tokens[args_len:]]
-                rest_list.insert(0, result[name])
-            except:
-                return None
-            result[name] = rest_list
-
-        # Fill the optional arg(s) not present with None as value.
-        # (At the moment, there is only a single optional arg.)
-        for arg in args:
-            if arg not in result:
-                result[arg] = None
-
-        return result
+        return solution, list(remainder.values())
 
     def _parse_opts(
         self,
-        opts: Dict[str, Optional[Callable[[str], Any]]],
-        tokens: List[str]
-    ) -> Optional[Tuple[Dict[str, Any], List[str]]]:
+        opts: dict[str, Callable[[Any], Any] | None],
+        tokens: list[str],
+    ) -> tuple[dict[str, Any], list[str]] | None:
         """Parse options from tokens.
 
         Return the parsed options together with their converted
@@ -432,37 +586,50 @@ class CommandParser:
         Return None on error.
         """
         index: int = 0
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         token: str = ""
 
         opts_len: int = len(opts)
         if not opts_len:
             return ({}, tokens)
 
+        skip_next_token = False
         for index in range(len(tokens)):
+            if skip_next_token:
+                skip_next_token = False
+                continue
             token = tokens[index]
             # Stop at the first non-option token.
-            if token[0] != '-':
+            if token[0] != "-":
                 break
-            opt: str = token[1]
-            if opt not in opts:
+
+            opt: str
+            if token.startswith("-") and not token.startswith("--"):
+                opt = token[1]
+            else:
+                opt = token[2:]
+
+            if not opt in opts:
                 # Invalid option.
                 return None
             try:
-                converter: Optional[Callable[[str], Any]] = opts[opt]
-                # "token[2:]" results in an empty string if there is no argument.
-                if converter is None and token[2:]:
-                    # Option does not accept any parameter.
-                    return None
+                converter: Callable[[Any], Any] | None = opts[opt]
                 if converter is not None:
-                    result[opt] = converter(token[2:])
+                    optarg: str | None
+                    if token.startswith("-") and not token.startswith("--"):
+                        optarg = token[2:]
+                    else:
+                        optarg = tokens[index + 1] if index + 1 < len(tokens) else None
+                        skip_next_token = True
+                    result[opt] = converter(optarg)
+
                 else:
                     result[opt] = True
             except:
                 return None
 
         # Skip last option if there have been only options.
-        if token and token[0] == '-':
+        if token and token[0] == "-":
             index += 1
 
         # Mark all non-existant flags as False and fill the values of
@@ -475,38 +642,80 @@ class CommandParser:
         # Remove all backslash escapes for "-".
         # Note that split() in self.parse() already converted the two
         # backslashes to a single one!
-        return (result, [t[1:] if t[0:2] == r'\-' else t for t in tokens[index:]])
+        return (result, [t[1:] if t[0:2] == r"\-" else t for t in tokens[index:]])
+
+
+class Conf:
+    _get_sql: str = "select Value from Conf where Key = ?"
+    _list_sql: str = "select * from Conf"
+    _remove_sql: str = "delete from Conf where Key = ?"
+    _update_sql: str = "replace into Conf values (?,?)"
+
+    def __init__(self, db: "DB | None" = None) -> None:
+        self._db: DB = DB() if db is None else db
+        self._db.checkout_table("Conf", "(Key text primary key, Value text not null)")
+
+    def get(self, key: str) -> str | None:
+        result: list[tuple[Any, ...]] = self._db.execute(self._get_sql, key)
+        if not result or len(result[0]) != 1:
+            return None
+        return cast(str, result[0][0])
+
+    def list(self) -> list[tuple[str, str]]:
+        return cast(list[tuple[str, str]], self._db.execute(self._list_sql))
+
+    def remove(self, key: str) -> None:
+        self._db.execute(self._remove_sql, key, commit=True)
+
+    def set(self, key: str, value: str) -> None:
+        """Set a key.
+
+        Note that a potential exception from the database is simply
+        passed through.
+        """
+        self._db.execute(self._update_sql, key, value, commit=True)
 
 
 class DB:
     """Simple wrapper class to conveniently access a sqlite database."""
 
-    path: Optional[str] = None
+    path: str | None = None
 
-    def __init__(self, *args: Any, read_only: bool = False, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        db_path: str | None = None,
+        read_only: bool = False,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the database connection.
 
         Arguments:
         ----------
+        db_path       Overrides the global default DB path.
         read_only     Opens a read-only database connection.
 
         *args and **kwargs are forwarded to sqlite.connect().
         """
-        if not DB.path:
-            raise ValueError('no path to database given')
-        if not isabs(DB.path):
-            raise ValueError('path to database is not absolute')
+        if not db_path:
+            if not DB.path:
+                raise ValueError("no path to database given")
+            db_path = DB.path
+        if not isabs(db_path):
+            raise ValueError("path to database is not absolute")
 
         self.read_only: bool = read_only
         if self.read_only:
-            kwargs.update(uri = True)
-            self.connection = sqlite.connect('file:' + DB.path + '?mode=ro', *args, **kwargs)
+            kwargs.update(uri=True)
+            self.connection = sqlite.connect(
+                "file:" + db_path + "?mode=ro", *args, **kwargs
+            )
         else:
-            self.connection = sqlite.connect(DB.path, *args, **kwargs)
+            self.connection = sqlite.connect(db_path, *args, **kwargs)
 
         self.cursor = self.connection.cursor()
         # Switch on foreign key support.
-        self.execute('pragma foreign_keys = on')
+        self.execute("pragma foreign_keys = on")
 
     def checkout_table(self, table: str, schema: str) -> None:
         """Create table if it does not already exist.
@@ -516,18 +725,17 @@ class DB:
         table   name of the table
         schema  schema of the table in the form of
                     '(Name Type, ...)' --> valid SQL!
+
+        Since this is only for internal use, screw SQL injections :)
         """
-        self.execute('create table if not exists {} {};'.format(table, schema), commit=True)
+        self.execute(f"create table if not exists {table} {schema};", commit=True)
 
     def close(self) -> None:
         self.connection.close()
 
     def execute(
-        self,
-        command: str,
-        *args: Any,
-        commit: bool = False
-    ) -> List[Tuple[Any, ...]]:
+        self, command: str, *args: Any, commit: bool = False
+    ) -> list[tuple[Any, ...]]:
         """Execute an sql command.
 
         Execute an sql command, save the new database state
@@ -547,11 +755,10 @@ class DB:
 class Response:
     """Some useful methods for building a response message."""
 
-    admin_err_msg: str = cleandoc(
+    privilege_err_msg: str = cleandoc(
         """
         Hi {}!
-        You need to be administrator of this organization in order to execute \
-        this command.
+        You don't have sufficient privileges to execute this command.
         """
     )
     command_not_found_msg: str = cleandoc(
@@ -573,25 +780,21 @@ class Response:
         Sorry, {}, an error occurred while executing your request.
         """
     )
-    greet_msg: str = 'Hi {}! :-)'
-    ok_emoji: str = 'ok'
-    no_emoji: str = 'cross_mark'
+    greet_msg: str = "Hi {}! :-)"
+    ok_emoji: str = "ok"
+    no_emoji: str = "cross_mark"
 
-    def __init__(
-        self,
-        message_type: MessageType,
-        response: Dict[str, Any]
-    ) -> None:
+    def __init__(self, message_type: MessageType, response: dict[str, Any]) -> None:
         self.message_type: MessageType = message_type
-        self.response: Dict[str, Any] = response
+        self.response: dict[str, Any] = response
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def __str__(self) -> str:
-        return json.dumps({
-            "message_type": str(self.message_type), "response": str(self.response)
-        })
+        return json.dumps(
+            {"message_type": str(self.message_type), "response": str(self.response)}
+        )
 
     def is_none(self) -> bool:
         """Check whether this response has the MessageType 'None'."""
@@ -600,12 +803,12 @@ class Response:
     @classmethod
     def build_message(
         cls,
-        message: Optional[Dict[str, Any]],
+        message: dict[str, Any] | None,
         content: str,
-        msg_type: Optional[str] = None,
-        to: Optional[Union[str, int, List[int], List[str]]] = None,
-        subject: Optional[str] = None
-    ) -> 'Response':
+        msg_type: str | None = None,
+        to: str | int | list[int] | list[str] | None = None,
+        subject: str | None = None,
+    ) -> "Response":
         """Build a message.
 
         Arguments:
@@ -614,7 +817,7 @@ class Response:
                        May be explicitely set to None. In this case,
                        'msg_type', 'to' (and 'subject' if 'msg_type'
                        is 'stream') have to be specified.
-        response   The content of the response.
+        content   The content of the response.
         msg_type   Determine if the response should be a stream or a
                    private message. ('stream', 'private')
                    [optional]
@@ -632,40 +835,31 @@ class Response:
 
         Return a Response object.
         """
-        if message is None and (msg_type is None
-                                or to is None
-                                or (msg_type == 'stream' and subject is None)):
+        if message is None and (
+            msg_type is None or to is None or (msg_type == "stream" and subject is None)
+        ):
             return cls.none()
 
         if message is not None:
             if msg_type is None:
-                msg_type = message['type']
-            private: bool = msg_type == 'private'
+                msg_type = message["type"]
+            private: bool = msg_type == "private"
 
             if to is None:
-                to = message['sender_email'] if private else message['stream_id']
+                to = message["sender_email"] if private else message["stream_id"]
 
             if subject is None:
-                subject = message['subject'] if not private else ''
+                subject = message["subject"] if not private else ""
 
         # 'subject' field is ignored for private messages
         # see https://zulip.com/api/send-message#parameter-topic
         return cls(
             MessageType.MESSAGE,
-            dict(**{
-                'type': msg_type,
-                'to': to,
-                'subject': subject,
-                'content': content
-            })
+            {"type": msg_type, "to": to, "subject": subject, "content": content},
         )
 
     @classmethod
-    def build_reaction(
-        cls,
-        message: Dict[str, Any],
-        emoji: str
-    ) -> 'Response':
+    def build_reaction(cls, message: dict[str, Any], emoji: str) -> "Response":
         """Build a reaction response.
 
         Arguments:
@@ -674,16 +868,11 @@ class Response:
         emoji     The emoji to react with.
         """
         return cls(
-            MessageType.EMOJI,
-            dict(message_id = message['id'], emoji_name = emoji)
+            MessageType.EMOJI, {"message_id": message["id"], "emoji_name": emoji}
         )
 
     @classmethod
-    def build_reaction_from_id(
-        cls,
-        message_id: int,
-        emoji: str
-    ) -> 'Response':
+    def build_reaction_from_id(cls, message_id: int, emoji: str) -> "Response":
         """Build a reaction response.
 
         Arguments:
@@ -691,97 +880,84 @@ class Response:
         message_id   The id of the message to react on.
         emoji        The emoji to react with.
         """
-        return cls(
-            MessageType.EMOJI,
-            dict(message_id = message_id, emoji_name = emoji)
-        )
+        return cls(MessageType.EMOJI, {"message_id": message_id, "emoji_name": emoji})
 
     @classmethod
-    def admin_err(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def privilege_err(cls, message: dict[str, Any]) -> "Response":
         """The user has not sufficient rights.
 
-        Tell the user that they have not administrator rights. Relevant
-        for some commands intended to be exclusively used by admins.
+        Tell the user that they have not sufficient privileges for a
+        certain command.
         """
         return cls.build_message(
-            message,
-            cls.admin_err_msg.format(message['sender_full_name'])
+            message, cls.privilege_err_msg.format(message["sender_full_name"])
         )
-        # TODO: rename to priviledge_err and adapt message
 
     @classmethod
-    def command_not_found(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def command_not_found(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that his command could not be found."""
-        return cls.build_reaction(message, 'question')
+        return cls.build_reaction(message, "question")
 
     @classmethod
-    def error(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def error(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that an error occurred."""
         return cls.build_message(
-            message, cls.error_msg.format(message['sender_full_name'])
+            message, cls.error_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def exception(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def exception(cls, message: dict[str, Any]) -> "Response":
         """Tell the user that an exception occurred."""
         return cls.build_message(
-            message, cls.exception_msg.format(message['sender_full_name'])
+            message, cls.exception_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def greet(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def greet(cls, message: dict[str, Any]) -> "Response":
         """Greet the user."""
         return cls.build_message(
-            message, cls.greet_msg.format(message['sender_full_name'])
+            message, cls.greet_msg.format(message["sender_full_name"])
         )
 
     @classmethod
-    def ok(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def ok(cls, message: dict[str, Any]) -> "Response":
         """Return an "ok"-reaction."""
         return cls.build_reaction(message, cls.ok_emoji)
 
     @classmethod
-    def no(
-        cls, message: Dict[str, Any]
-    ) -> 'Response':
+    def no(cls, message: dict[str, Any]) -> "Response":
         """Return a "no"-reaction."""
         return cls.build_reaction(message, cls.no_emoji)
 
     @classmethod
-    def none(cls) -> 'Response':
+    def none(cls) -> "Response":
         """No response."""
         return cls(MessageType.NONE, {})
 
 
 def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Type[T]]:
-    plugin_classes: List[Type[T]] = []
+    plugin_classes: list[Type[T]] = []
     for _, module in getmembers(import_module(module_path), ismodule):
-        plugin_classes.extend(filter(
-            lambda c: c.__module__ == module.__name__ and issubclass(c, class_type), # type: ignore
-            map(lambda t: t[1], getmembers(module, isclass)) # type: ignore
-        ))
+        for _, value in getmembers(module, isclass):
+            if value.__module__ == module.__name__ and issubclass(value, class_type):
+                plugin_classes.append(value)
+
     return plugin_classes
+
+
+def is_bot_owner(user_id: int, db: DB | None = None) -> bool:
+    """Checks whether the given user id belongs to the bot owner."""
+    conf: Conf = Conf(db=db)
+    return conf.get("bot_owner") == str(user_id)
 
 
 def split(
     string: str,
-    sep: Optional[str] = None,
+    sep: str | None = None,
     exact_split: int = 0,
     discard_empty: bool = True,
-    converter: Optional[List[Callable[[str], Any]]] = None
-) -> Optional[List[Any]]:
+    converter: list[Callable[[str], Any]] | None = None,
+) -> list[Any] | None:
     """Similar to the default split, but respects quotes.
 
     Basically, it's a wrapper for shlex.
@@ -806,6 +982,7 @@ def split(
     Whitespace around the resulting tokens will be removed.
     Return None if there has been an error.
     """
+
     def exec_converter(conv: Callable[[str], Any], arg: str) -> Any:
         try:
             result: Any = conv(arg)
@@ -817,17 +994,17 @@ def split(
         return None
 
     parser: shlex.shlex = shlex.shlex(
-        instream = string, posix = True, punctuation_chars = False
+        instream=string, posix=True, punctuation_chars=False
     )
     # Do not handle comments.
-    parser.commenters = ''
+    parser.commenters = ""
     # Split only on the characters specified as "whitespace".
     parser.whitespace_split = True
     if sep:
         parser.whitespace = sep
 
     try:
-        result: List[Any] = list(map(str.strip, parser))
+        result: list[Any] = list(map(str.strip, parser))
     except:
         return None
 
@@ -846,8 +1023,7 @@ def split(
             converter.extend(repeat(converter[-1], len_result - len_converter))
 
         result = [
-            exec_converter(conv, token)
-            for (conv, token) in zip(converter, result)
+            exec_converter(conv, token) for (conv, token) in zip(converter, result)
         ]
 
     return result
@@ -866,10 +1042,10 @@ def stream_name_match(stream_reg: str, stream_name: str) -> bool:
 
     Currently, Zulip considers stream names to be case insensitive.
     """
-    return re.fullmatch(stream_reg, stream_name, flags = re.I) is not None
+    return re.fullmatch(stream_reg, stream_name, flags=re.I) is not None
 
 
-def validate_and_return_regex(regex: Optional[str]) -> Optional[str]:
+def validate_and_return_regex(regex: str | None) -> str | None:
     """Validate a regex and return it.
 
     Return None in case the regex is invalid.

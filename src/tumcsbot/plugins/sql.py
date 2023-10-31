@@ -4,13 +4,13 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Tuple, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import DB, Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class Source(PluginCommand, PluginThread):
+class Source(PluginCommandMixin, PluginThread):
     syntax = cleandoc(
         """
         sql <sql_script>
@@ -28,22 +28,22 @@ class Source(PluginCommand, PluginThread):
 
     def _init_plugin(self) -> None:
         # Get own read-only (!!!) database connection.
-        self._db: DB = DB(read_only = True)
+        self._db: DB = DB(read_only=True)
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        result_sql: List[Tuple[Any, ...]]
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        result_sql: list[tuple[Any, ...]]
 
-        if not self.client().user_is_privileged(message['sender_id']):
-            return Response.admin_err(message)
+        if not self.client.user_is_privileged(message["sender_id"]):
+            return Response.privilege_err(message)
 
         try:
-            if message['command'] == 'list':
+            if message["command"] == "list":
                 result_sql = self._db.execute(self._list_sql)
             else:
-                result_sql = self._db.execute(message['command'])
+                result_sql = self._db.execute(message["command"])
         except Exception as e:
             return Response.build_message(message, str(e))
 
-        result: str = '```text\n' + '\n'.join(map(str, result_sql)) + '\n```'
+        result: str = "```text\n" + "\n".join(map(str, result_sql)) + "\n```"
 
         return Response.build_message(message, result)

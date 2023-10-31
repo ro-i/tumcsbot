@@ -4,14 +4,14 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import split, validate_and_return_regex, Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class ArchiveStreams(PluginCommand, PluginThread):
-    syntax = 'archive_streams <stream_regex>...'
+class ArchiveStreams(PluginCommandMixin, PluginThread):
+    syntax = "archive_streams <stream_regex>..."
     description = cleandoc(
         """
         Archive streams according to the given regular expressions, which have
@@ -24,48 +24,49 @@ class ArchiveStreams(PluginCommand, PluginThread):
         archive_streams "Test.*" "ABC \\d* class"
         ```
         """
-        )
+    )
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        if not self.client().user_is_privileged(message['sender_id']):
-            return Response.admin_err(message)
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        if not self.client.user_is_privileged(message["sender_id"]):
+            return Response.privilege_err(message)
 
-        stream_regexes: Optional[List[Any]] = split(
-            message['command'], converter = [validate_and_return_regex]
+        stream_regexes: list[Any] | None = split(
+            message["command"], converter=[validate_and_return_regex]
         )
         if stream_regexes is None or None in stream_regexes:
-            return Response.build_message(message, 'Found invalid regular expressions.')
+            return Response.build_message(message, "Found invalid regular expressions.")
 
-        response: List[str] = []
+        response: list[str] = []
 
         for stream_regex in stream_regexes:
-            streams: List[str] = self.client().get_streams_from_regex(stream_regex)
+            streams: list[str] = self.client.get_streams_from_regex(stream_regex)
             removed: int = 0
 
             for stream in streams:
-                result: Dict[str, Any] = self.client().get_stream_id(stream)
-                if result['result'] != 'success':
+                result: dict[str, Any] = self.client.get_stream_id(stream)
+                if result["result"] != "success":
                     continue
-                stream_id: int = result['stream_id']
+                stream_id: int = result["stream_id"]
 
                 # Check if stream is empty.
-                result = self.client().get_messages({
-                    'anchor': 'oldest',
-                    'num_before': 0,
-                    'num_after': 1,
-                    'narrow': [
-                        {'operator': 'stream', 'operand': stream_id}
-                    ]
-                })
-                if result['result'] != 'success' or result['messages']:
+                result = self.client.get_messages(
+                    {
+                        "anchor": "oldest",
+                        "num_before": 0,
+                        "num_after": 1,
+                        "narrow": [{"operator": "stream", "operand": stream_id}],
+                    }
+                )
+                if result["result"] != "success" or result["messages"]:
                     continue
 
                 # Archive the stream: https://zulip.com/help/archive-a-stream
-                result = self.client().delete_stream(stream_id)
-                if result['result'] == 'success':
+                result = self.client.delete_stream(stream_id)
+                if result["result"] == "success":
                     removed += 1
 
-            response.append('"%s" - found %d matching streams, removed %d'
-                            % (stream_regex, len(streams), removed))
+            response.append(
+                f"'{stream_regex}' - found {len(streams)} matching streams, removed {removed}"
+            )
 
-        return Response.build_message(message, '\n'.join(response))
+        return Response.build_message(message, "\n".join(response))

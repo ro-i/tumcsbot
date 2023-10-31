@@ -3,24 +3,20 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import os
-import signal
-from typing import Any, Dict, Iterable, Union
+from typing import Any, Iterable
 
-from tumcsbot.lib import Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.lib import Response, is_bot_owner
+from tumcsbot.plugin import Event, PluginCommandMixin, PluginThread
 
 
-class Restart(PluginCommand, PluginThread):
-    syntax = 'restart'
-    description = 'Restart the bot.\n[administrator/moderator rights needed]'
+class Restart(PluginCommandMixin, PluginThread):
+    syntax = "restart"
+    description = "Restart the bot.\n[only bot owner]"
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        if not self.client().user_is_privileged(message['sender_id']):
-            return Response.admin_err(message)
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        if not is_bot_owner(message["sender_id"]):
+            return Response.privilege_err(message)
 
-        # Ask the parent process to restart.
-        os.kill(os.getpid(), signal.SIGUSR1)
+        self.plugin_context.push_loopback(Event._empty_event("restart", "_root"))
 
-        # dead code
         return Response.none()

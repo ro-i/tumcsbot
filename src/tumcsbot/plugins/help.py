@@ -4,22 +4,22 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
+from typing import Any, Iterable
 
 from tumcsbot.lib import DB, Response, get_classes_from_path
-from tumcsbot.plugin import PluginCommand, _Plugin, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, _Plugin, PluginThread
 
 
-class Help(PluginCommand, PluginThread):
+class Help(PluginCommandMixin, PluginThread):
     """Provide a help command plugin."""
 
     # This plugin depends on all the others because it needs their db entries.
-    dependencies = PluginCommand.dependencies + [
-        cast(str, plugin_class.plugin_name)
-        for plugin_class in get_classes_from_path("tumcsbot.plugins", _Plugin) # type: ignore
+    dependencies = PluginCommandMixin.dependencies + [
+        plugin_class.plugin_name()
+        for plugin_class in get_classes_from_path("tumcsbot.plugins", _Plugin)  # type: ignore
     ]
-    syntax = 'help'
-    description = 'Post a help message to the requesting user.'
+    syntax = "help"
+    description = "Post a help message to the requesting user."
     _help_overview_template: str = cleandoc(
         """
         Hi {}!
@@ -40,13 +40,15 @@ class Help(PluginCommand, PluginThread):
         """
     )
     _get_usage_all_sql: str = "select name, syntax, description from Plugins"
-    _get_usage_name_sql: str = "select name, syntax, description from Plugins where name = ?"
+    _get_usage_name_sql: str = (
+        "select name, syntax, description from Plugins where name = ?"
+    )
 
     def _init_plugin(self) -> None:
-        self.help_info: List[Tuple[str, str, str]] = self._get_help_info()
+        self.help_info: list[tuple[str, str, str]] = self._get_help_info()
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        command: str = message['command'].strip()
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        command: str = message["command"].strip()
         if not command:
             return self._help_overview(message)
         return self._help_command(message, command)
@@ -61,17 +63,17 @@ class Help(PluginCommand, PluginThread):
     @staticmethod
     def _format_syntax(syntax: str) -> str:
         """Format the syntax string of a command."""
-        return '```text\n' + syntax.strip() + '\n```\n'
+        return "```text\n" + syntax.strip() + "\n```\n"
 
-    def _get_help_info(self) -> List[Tuple[str, str, str]]:
+    def _get_help_info(self) -> list[tuple[str, str, str]]:
         """Get help information from each command.
 
         Return a list of tuples (command name, syntax, description).
         """
         db: DB = DB()
-        result_sql: List[Tuple[Any, ...]] = db.execute(self._get_usage_all_sql)
+        result_sql: list[tuple[Any, ...]] = db.execute(self._get_usage_all_sql)
         db.close()
-        result: List[Tuple[str, str, str]] = [
+        result: list[tuple[str, str, str]] = [
             (name, self._format_syntax(syntax), self._format_description(description))
             for name, syntax, description in result_sql
             if syntax is not None and description is not None
@@ -80,11 +82,10 @@ class Help(PluginCommand, PluginThread):
         return sorted(result, key=lambda tuple: tuple[0])
 
     def _help_command(
-        self,
-        message: Dict[str, Any],
-        command: str
-    ) -> Union[Response, Iterable[Response]]:
-        info_tuple: Optional[Tuple[str, str, str]] = None
+        self, message: dict[str, Any], command: str
+    ) -> Response | Iterable[Response]:
+        info_tuple: tuple[str, str, str] | None = None
+        self.help_info = self._get_help_info()
 
         for ituple in self.help_info:
             if ituple[0] == command:
@@ -93,22 +94,23 @@ class Help(PluginCommand, PluginThread):
         if info_tuple is None:
             return Response.command_not_found(message)
 
-        help_message: str = '\n'.join(info_tuple[1:])
+        help_message: str = "\n".join(info_tuple[1:])
 
         return Response.build_message(
-            message, help_message, msg_type = 'private', to = message['sender_email']
+            message, help_message, msg_type="private", to=message["sender_email"]
         )
 
-    def _help_overview(
-        self,
-        message: Dict[str, Any]
-    ) -> Union[Response, Iterable[Response]]:
+    def _help_overview(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         # Get the command names.
-        help_message: str = '\n'.join(map(lambda tuple: '- ' + tuple[0], self.help_info))
+        help_message: str = "\n".join(
+            map(lambda tuple: "- " + tuple[0], self.help_info)
+        )
 
         return Response.build_message(
             message,
-            self._help_overview_template.format(message['sender_full_name'], help_message),
-            msg_type = 'private',
-            to = message['sender_email']
+            self._help_overview_template.format(
+                message["sender_full_name"], help_message
+            ),
+            msg_type="private",
+            to=message["sender_email"],
         )

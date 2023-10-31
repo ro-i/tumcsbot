@@ -4,15 +4,14 @@
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
 from inspect import cleandoc
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Iterable
 
 from tumcsbot.lib import split, Response
-from tumcsbot.plugin import PluginCommand, PluginThread
+from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
-class CreateStreams(PluginCommand, PluginThread):
-    schedulable = True
-    syntax = 'create_streams <stream_name>,<stream_description>...'
+class CreateStreams(PluginCommandMixin, PluginThread):
+    syntax = "create_streams <stream_name>,<stream_description>..."
     description = cleandoc(
         """
         Create a public stream for every (stream,description)-tuple \
@@ -32,35 +31,34 @@ class CreateStreams(PluginCommand, PluginThread):
         - It is not yet possible to have single-quotes (`'`) in stream \
         names or descriptions.
         """
-        )
+    )
 
-    def handle_message(self, message: Dict[str, Any]) -> Union[Response, Iterable[Response]]:
-        if not self.client().user_is_privileged(message['sender_id']):
-            return Response.admin_err(message)
+    def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        if not self.client.user_is_privileged(message["sender_id"]):
+            return Response.privilege_err(message)
 
-        failed: List[str] = []
+        failed: list[str] = []
 
-        stream_tuples: Optional[List[Any]] = split(
-            message['command'], converter = [lambda t: split(
-                t, sep = ',', exact_split = 2, discard_empty = False
-            )]
+        stream_tuples: list[Any] | None = split(
+            message["command"],
+            converter=[lambda t: split(t, sep=",", exact_split=2, discard_empty=False)],
         )
         if stream_tuples is None or None in stream_tuples:
             return Response.error(message)
 
         for stream, desc in stream_tuples:
             if not stream:
-                failed.append('one empty stream name')
+                failed.append("one empty stream name")
                 continue
-            result: Dict[str, Any] = self.client().add_subscriptions(
-                streams = [{'name': stream, 'description': desc}]
+            result: dict[str, Any] = self.client.add_subscriptions(
+                streams=[{"name": stream, "description": desc}]
             )
-            if result['result'] != 'success':
-                failed.append(f'stream: {stream}, description: {desc}')
+            if result["result"] != "success":
+                failed.append(f"stream: {stream}, description: {desc}")
 
         if not failed:
             return Response.ok(message)
 
-        response: str = 'Failed to create the following streams:\n' + '\n'.join(failed)
+        response: str = "Failed to create the following streams:\n" + "\n".join(failed)
 
-        return Response.build_message(message, response, msg_type = 'private')
+        return Response.build_message(message, response, msg_type="private")
