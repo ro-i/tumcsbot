@@ -6,7 +6,7 @@
 from inspect import cleandoc
 from typing import Any, Iterable
 
-from tumcsbot.lib import CommandParser, Conf, Response
+from tumcsbot.lib import CommandParser, Conf, Response, is_bot_owner
 from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
@@ -35,7 +35,7 @@ class ConfPlugin(PluginCommandMixin, PluginThread):
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         result: tuple[str, CommandParser.Opts, CommandParser.Args] | None
 
-        if not self.client.user_is_privileged(message["sender_id"]):
+        if not is_bot_owner(message["sender_id"]):
             return Response.privilege_err(message)
 
         result = self.command_parser.parse(message["command"])

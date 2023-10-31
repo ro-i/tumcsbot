@@ -9,7 +9,7 @@ from inspect import cleandoc
 from pathlib import Path
 from typing import Any, Iterable
 
-from tumcsbot.lib import Response
+from tumcsbot.lib import Response, is_bot_owner
 from tumcsbot.plugin import PluginCommandMixin, PluginThread
 
 
@@ -18,14 +18,14 @@ class Update(PluginCommandMixin, PluginThread):
     description = cleandoc(
         """
         Update the bot. You may want to restart it afterwards.
-        [administrator/moderator rights needed]
+        [only bot owner]
         """
     )
     _git_pull_cmd: list[str] = ["git", "pull"]
     _timeout: int = 15
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client.user_is_privileged(message["sender_id"]):
+        if not is_bot_owner(message["sender_id"]):
             return Response.privilege_err(message)
 
         # Get the dirname of this file (which is located in the git repo).

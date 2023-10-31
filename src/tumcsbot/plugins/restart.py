@@ -5,16 +5,16 @@
 
 from typing import Any, Iterable
 
-from tumcsbot.lib import Response
+from tumcsbot.lib import Response, is_bot_owner
 from tumcsbot.plugin import Event, PluginCommandMixin, PluginThread
 
 
 class Restart(PluginCommandMixin, PluginThread):
     syntax = "restart"
-    description = "Restart the bot.\n[administrator/moderator rights needed]"
+    description = "Restart the bot.\n[only bot owner]"
 
     def handle_message(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        if not self.client.user_is_privileged(message["sender_id"]):
+        if not is_bot_owner(message["sender_id"]):
             return Response.privilege_err(message)
 
         self.plugin_context.push_loopback(Event._empty_event("restart", "_root"))

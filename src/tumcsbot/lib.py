@@ -963,6 +963,12 @@ def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Typ
     return plugin_classes
 
 
+def is_bot_owner(user_id: int, db: DB | None = None) -> bool:
+    """Checks whether the given user id belongs to the bot owner."""
+    conf: Conf = Conf(db=db)
+    return conf.get("bot_owner") == str(user_id)
+
+
 def split(
     string: str,
     sep: str | None = None,
