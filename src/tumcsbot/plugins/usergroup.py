@@ -70,7 +70,10 @@ class Usergroup(PluginCommandMixin, PluginThread):
         )
         self.command_parser.add_subcommand(
             "remove",
-            optionals={"user": Regex.match_user_argument, "group": Regex.match_group_argument},
+            optionals={
+                "user": Regex.match_user_argument,
+                "group": Regex.match_group_argument,
+            },
             description=cleandoc(
                 """
                 remove user from groups
@@ -81,10 +84,13 @@ class Usergroup(PluginCommandMixin, PluginThread):
         )
         self.command_parser.add_subcommand(
             "add",
-            greedy={"groups": Regex.match_group_argument, "users": Regex.match_user_argument},
+            greedy={
+                "groups": Regex.match_group_argument,
+                "users": Regex.match_user_argument,
+            },
             description=cleandoc(
                 """
-                remove users to groups
+                add users to groups
                 - `user` : the user that should get added to groups
                 - `group` : the groups the users should get added to
                 """

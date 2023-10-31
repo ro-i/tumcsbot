@@ -271,10 +271,18 @@ class Regex:
 
     @staticmethod
     def match_group_argument(s: str) -> str:
-        if Regex._GROUP_ARGUMENT_PATTERN.match(s):
-            return s
-        else:
+        if (
+            Regex._USER_ARGUMENT_PATTERN.match(s)
+            or Regex._STREAM_ARGUMENT_PATTERN.match(s)
+            or Regex._REACTION_ARGUMENT_PATTERN.match(s)
+        ):
             raise ValueError()
+        return s
+        # todo: enable as soo as zulip api allows usergroups
+        # if Regex._GROUP_ARGUMENT_PATTERN.match(s):
+        #     return s
+        # else:
+        #     raise ValueError()
 
     @staticmethod
     def match_stream_argument(s: str) -> str:
