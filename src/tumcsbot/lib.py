@@ -423,11 +423,10 @@ class CommandParser:
                 ]
                 if e
             ]
-        except:
+        except Exception as e:
             return None
         if not tokens or len(tokens) == 0:
             return None
-
         # Get the fitting subcommand.
         subcommand: str = tokens[0]
         if subcommand not in self.commands:
@@ -539,13 +538,6 @@ class CommandParser:
         solution: dict[str, Any],
     ) -> bool:
         for target_name, converter in target.items():
-            if type(converter) == type:
-                continue
-            if CommandParser._convert_argument(target_name, arg, converter, solution):
-                return True
-        for target_name, converter in target.items():
-            if type(converter) != type:
-                continue
             if CommandParser._convert_argument(target_name, arg, converter, solution):
                 return True
         return False
