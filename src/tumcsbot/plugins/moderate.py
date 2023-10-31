@@ -117,14 +117,15 @@ class Moderate(PluginCommandMixin, PluginThread):
                 """                Deine Nachricht wurde gelöscht. Bitte verwende eine Suchmaschine deiner Wahl, um dein Problem zu lösen oder deine Frage zu beantworten.
                                                         ---
                                                         Your message was deleted. Please use a search engine of your choice to answer your question or solve your problem.
-                                                        spoiler
-                                                        :stackoverflow:[stackoverflow](https://stackoverflow.com/?q=$escaped_topic)
-                                                        [DuckDuckGo](https://duckduckgo.com/?q=$escaped_topic)
-                                                        [Google](https://google.com/search?q=$escaped_topic)
-                                                        [Bing](https://bing.com/search?q=$escaped_topic)
-                                                        [Ecosia](https://ecosia.com/search?q=$escaped_topic)
-                                                        [Yahoo](https://yahoo.com/search?q=$escaped_topic)
-                                                        [webcrawler](https://www.webcrawler.com/search?q=$escaped_topic)
+                                                        ```spoiler
+                                                        [stackoverflow](https://stackoverflow.com/?q=$escaped_topic):stackoverflow:
+                                                        [DuckDuckGo](https://duckduckgo.com/?q=$escaped_topic):duck:
+                                                        [Google](https://google.com/search?q=$escaped_topic):google:
+                                                        [Bing](https://bing.com/search?q=$escaped_topic):microsoft:
+                                                        [Ecosia](https://ecosia.com/search?q=$escaped_topic):tree:
+                                                        [Yahoo](https://yahoo.com/search?q=$escaped_topic):yahoo:
+                                                        [webcrawler](https://www.webcrawler.com/search?q=$escaped_topic):web:
+                                                        ```
                                                         ```spoiler Deine ursprüngliche Nachricht in $topic | Your original message in $topic 
                                                         $content
                                                         ```
@@ -259,8 +260,15 @@ class Moderate(PluginCommandMixin, PluginThread):
 
         self.command_parser.add_subcommand(
             "add",
-            args={"reaction": Regex.match_reaction_argument, "action": Moderate.parse_action},
-            optionals={"user": Regex.match_user_argument, "message": str, "description": str},
+            args={
+                "reaction": Regex.match_reaction_argument,
+                "action": Moderate.parse_action,
+            },
+            optionals={
+                "user": Regex.match_user_argument,
+                "message": str,
+                "description": str,
+            },
             description=cleandoc(
                 """
                 Add an moderation configuration for a user.
@@ -311,7 +319,10 @@ class Moderate(PluginCommandMixin, PluginThread):
 
         self.command_parser.add_subcommand(
             "revoke",
-            optionals={"group": Regex.match_group_argument, "stream": Regex.match_stream_argument},
+            optionals={
+                "group": Regex.match_group_argument,
+                "stream": Regex.match_stream_argument,
+            },
             description=cleandoc(
                 """
                 Remove authorization
