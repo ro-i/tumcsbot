@@ -1,4 +1,3 @@
-graphlib-backport
 mypy
 pylint
 pytest
