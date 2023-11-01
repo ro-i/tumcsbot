@@ -179,7 +179,7 @@ class CommandParserTestQuotes(CommandParserTest):
         self.assertIsNone(self._do_parse_args('test "a "b" c'))
         self.assertIsNone(self._do_parse_args("test a 'b c"))
         self.assertIsNone(self._do_parse_args("test 'a 'b' c"))
-        #self.assertIsNone(self._do_parse_args("test 'a \\' b' c"))
+        # self.assertIsNone(self._do_parse_args("test 'a \\' b' c"))
 
 
 class CommandParserTestOpts(CommandParserTest):
