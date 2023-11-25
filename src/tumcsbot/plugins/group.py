@@ -3,10 +3,11 @@
 # See LICENSE file for copyright and license details.
 # TUM CS Bot - https://github.com/ro-i/tumcsbot
 
-import re
+from collections.abc import Iterable as IterableClass
 from inspect import cleandoc
-from typing import cast, Any, Callable, Iterable
+import re
 from sqlite3 import IntegrityError
+from typing import cast, Any, Callable, Iterable
 
 from tumcsbot.lib import stream_name_match, CommandParser, DB, Regex, Response
 from tumcsbot.plugin import Event, PluginCommandMixin, PluginProcess
@@ -27,6 +28,8 @@ class Group(PluginCommandMixin, PluginProcess):
           or group unclaim <group_id> <message_id>
           or group announce
           or group unannounce <message_id>
+          or group fix <group_id>
+          or group fix_all
         """
     )
     description = cleandoc(
@@ -53,9 +56,16 @@ class Group(PluginCommandMixin, PluginProcess):
         user gets subscribed to all streams belonging to this group. \
         A message with the `group claim` command in the first line may \
         also contain arbitrary other text.
-        Finally, `group announce` triggers a message from the bot \
+        `group announce` triggers a message from the bot \
         which will be "special" for all groups and in which the bot \
         will maintain a list of all groups.
+        `group fix` makes sure that every subscriber of the given group \
+        is subscribed to all streams of this group. This command is \
+        intended to fix situations where the usual mechanism failed for \
+        some reason. You will receive additional debug information in \
+        case the fix command fails, too. Please forward this information \
+        then to the bot owner.
+        `group fix_all` does the same as `group fix` for every group.
 
         [administrator/moderator rights needed except for (un)subscribe]
         """
@@ -167,6 +177,8 @@ class Group(PluginCommandMixin, PluginProcess):
         )
         self.command_parser.add_subcommand("announce")
         self.command_parser.add_subcommand("unannounce", args={"message_id": int})
+        self.command_parser.add_subcommand("fix", args={"group_id": str})
+        self.command_parser.add_subcommand("fix_all")
 
         # Init some usefule constants.
         self._get_emoji: re.Pattern[str] = re.compile(r"\s*:?([^:]+):?\s*")
@@ -226,6 +238,10 @@ class Group(PluginCommandMixin, PluginProcess):
                     message, f"Error: At least one argument is required for `streams`."
                 )
             return self._change_streams(message, args.group_id, command, args.streams)
+        if command == "fix":
+            return self._fix(message, args.group_id)
+        if command == "fix_all":
+            return self._fix_all(message)
 
         return Response.command_not_found(message)
 
@@ -467,6 +483,31 @@ class Group(PluginCommandMixin, PluginProcess):
 
         return success
 
+    def _fix(
+        self,
+        message: dict[str, Any],
+        group_id: str,
+    ) -> Response | Iterable[Response]:
+        failed: list[str] = self._subscribe_users_to_stream_regexes(
+            self._get_group_subscribers([group_id]),
+            self._get_stream_regs_from_group_id(group_id),
+        )
+        if failed:
+            return Response.build_message(
+                message, f"failed for the following streams: {failed}"
+            )
+        return Response.ok(message)
+
+    def _fix_all(self, message: dict[str, Any]) -> Response | Iterable[Response]:
+        responses: list[Response] = []
+        for group_id, _, _ in self._db.execute(self._list_sql):
+            response: Response | Iterable[Response] = self._fix(message, group_id)
+            if isinstance(response, IterableClass):
+                responses.extend(response)
+            else:
+                responses.append(response)
+        return responses
+
     def _get_emoji_from_group(self, group_id: str) -> str | None:
         """Get the emoji for a given group id."""
         result_sql: list[tuple[Any, ...]] = self._db.execute(
@@ -526,6 +567,14 @@ class Group(PluginCommandMixin, PluginProcess):
             )
 
         return list(result)
+
+    def _get_stream_regs_from_group_id(self, group_id: str) -> list[str]:
+        stream_regs: list[str] = []
+        for (stream_regs_str,) in self._db.execute(self._get_streams_sql, group_id):
+            if not stream_regs_str:
+                continue
+            stream_regs.extend(stream_regs_str.split("\n"))
+        return stream_regs
 
     def _list(self, message: dict[str, Any]) -> Response | Iterable[Response]:
         """Command `group list`."""
@@ -588,14 +637,8 @@ class Group(PluginCommandMixin, PluginProcess):
                 message=None, content=msg, msg_type="private", to=[user_id]
             )
 
-        stream_regs: list[str] = []
-        for (stream_regs_str,) in self._db.execute(self._get_streams_sql, group_id):
-            if not stream_regs_str:
-                continue
-            stream_regs.extend(stream_regs_str.split("\n"))
-
         no_success: list[str] = self._subscribe_users_to_stream_regexes(
-            [user_id], stream_regs
+            [user_id], self._get_stream_regs_from_group_id(group_id)
         )
 
         if not no_success:
