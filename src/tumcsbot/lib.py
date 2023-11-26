@@ -948,7 +948,7 @@ def get_classes_from_path(module_path: str, class_type: Type[T]) -> Iterable[Typ
     for _, module in getmembers(import_module(module_path), ismodule):
         for _, value in getmembers(module, isclass):
             if value.__module__ == module.__name__ and issubclass(value, class_type):
-                plugin_classes.append(value)
+                plugin_classes.append(value)  # pyright: ignore
 
     return plugin_classes
 
