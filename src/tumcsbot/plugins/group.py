@@ -18,7 +18,7 @@ class Group(PluginCommandMixin, PluginProcess):
     syntax = cleandoc(
         """
         group subscribe <group_id>
-          or group unsubscribe [-r] <group_id>
+          or group unsubscribe [-s] <group_id>
           or group add <group_id> <emoji>
           or group remove <group_id>
           or group add_streams <group_id> <stream_pattern>...
@@ -40,10 +40,11 @@ class Group(PluginCommandMixin, PluginProcess):
 
         Subscribe to / unsubscribe from a group using \
         `group (un)subscribe`.
-        If you use the `-r` switch for `group unsubscribe`, you will \
+        If you use the `-s` switch for `group unsubscribe`, you will \
         not only unsubscribe from your group subscription, but also \
         from all the streams belonging to this group as long as they \
-        do not also belong to another group you are subscribed to.
+        do not also belong to another group you are subscribed to. \
+        (It's not an `s`. On my world it means "streams".)
 
         Create/remove a stream group with `group add`/`group remove` by \
         specifing an identifier and an emoji. Note that removing a stream \
@@ -165,7 +166,7 @@ class Group(PluginCommandMixin, PluginProcess):
         self.command_parser = CommandParser()
         self.command_parser.add_subcommand("subscribe", args={"group_id": str})
         self.command_parser.add_subcommand(
-            "unsubscribe", opts={"r": None}, args={"group_id": str}
+            "unsubscribe", opts={"s": None}, args={"group_id": str}
         )
         self.command_parser.add_subcommand(
             "add", args={"group_id": str, "emoji": Regex.get_emoji_name}
@@ -218,7 +219,7 @@ class Group(PluginCommandMixin, PluginProcess):
             return self._subscribe(message["sender_id"], args.group_id, message)
         if command == "unsubscribe":
             return self._unsubscribe(
-                message["sender_id"], args.group_id, message, opts.r
+                message["sender_id"], args.group_id, message, opts.s
             )
 
         if not self.client.user_is_privileged(message["sender_id"]):
@@ -712,7 +713,7 @@ class Group(PluginCommandMixin, PluginProcess):
         user_id: int,
         group_id: str,
         message: dict[str, Any] | None = None,
-        real: bool = False,
+        with_streams: bool = False,
     ) -> Response | Iterable[Response]:
         """Unsubscribe a user from a group.
 
@@ -722,7 +723,7 @@ class Group(PluginCommandMixin, PluginProcess):
         """
         self._db.execute(self._unsubscribe_user_sql, user_id, group_id, commit=True)
 
-        if not real:
+        if not with_streams:
             if message is not None:
                 return Response.ok(message)
             return Response.build_message(
