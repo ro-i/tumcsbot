@@ -11,7 +11,7 @@ import re
 from threading import RLock
 import time
 from collections.abc import Iterable as IterableClass
-from typing import cast, Any, Callable, IO, Iterable
+from typing import cast, Any, Callable, IO, Iterable, Sequence
 
 from zulip import Client as ZulipClient
 
@@ -735,6 +735,14 @@ class SharedClient:
     @synchronized(_shared_client_lock)
     def remove_reaction(self, reaction_data: dict[str, Any]) -> dict[str, Any]:
         return self._client.remove_reaction(reaction_data=reaction_data)
+
+    @synchronized(_shared_client_lock)
+    def remove_subscriptions(
+        self,
+        streams: Iterable[str],
+        principals: Sequence[str] | Sequence[int] | None = None,
+    ) -> dict[str, Any]:
+        return self._client.remove_subscriptions(streams=streams, principals=principals)
 
     @synchronized(_shared_client_lock)
     def send_response(self, response: Response) -> dict[str, Any]:

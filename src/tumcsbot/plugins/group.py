@@ -17,7 +17,8 @@ class Group(PluginCommandMixin, PluginProcess):
     zulip_events = ["message", "reaction", "stream"]
     syntax = cleandoc(
         """
-        group (un)subscribe <group_id>
+        group subscribe <group_id>
+          or group unsubscribe [-r] <group_id>
           or group add <group_id> <emoji>
           or group remove <group_id>
           or group add_streams <group_id> <stream_pattern>...
@@ -39,6 +40,10 @@ class Group(PluginCommandMixin, PluginProcess):
 
         Subscribe to / unsubscribe from a group using \
         `group (un)subscribe`.
+        If you use the `-r` switch for `group unsubscribe`, you will \
+        not only unsubscribe from your group subscription, but also \
+        from all the streams belonging to this group as long as they \
+        do not also belong to another group you are subscribed to.
 
         Create/remove a stream group with `group add`/`group remove` by \
         specifing an identifier and an emoji. Note that removing a stream \
@@ -106,6 +111,9 @@ class Group(PluginCommandMixin, PluginProcess):
     _get_group_from_emoji_sql: str = "select Id from Groups where Emoji = ?"
     _get_group_subscribers_sql: str = "select UserId from GroupUsers where GroupId = ?"
     _get_streams_sql: str = "select Streams from Groups where Id = ? collate nocase"
+    _get_streams_from_user_sql: str = (
+        "select Streams from Groups join GroupUsers on Id = GroupId where UserId = ?"
+    )
     _insert_sql: str = "insert into Groups values (?,?,?)"
     _is_group_claimed_by_msg_sql: str = (
         "select * from GroupClaims where GroupId = ? and MessageId = ?"
@@ -156,7 +164,9 @@ class Group(PluginCommandMixin, PluginProcess):
         # Init command parsing.
         self.command_parser = CommandParser()
         self.command_parser.add_subcommand("subscribe", args={"group_id": str})
-        self.command_parser.add_subcommand("unsubscribe", args={"group_id": str})
+        self.command_parser.add_subcommand(
+            "unsubscribe", opts={"r": None}, args={"group_id": str}
+        )
         self.command_parser.add_subcommand(
             "add", args={"group_id": str, "emoji": Regex.get_emoji_name}
         )
@@ -202,12 +212,14 @@ class Group(PluginCommandMixin, PluginProcess):
         result = self.command_parser.parse(message["command"])
         if result is None:
             return Response.command_not_found(message)
-        command, _, args = result
+        command, opts, args = result
 
         if command == "subscribe":
             return self._subscribe(message["sender_id"], args.group_id, message)
         if command == "unsubscribe":
-            return self._unsubscribe(message["sender_id"], args.group_id, message)
+            return self._unsubscribe(
+                message["sender_id"], args.group_id, message, opts.r
+            )
 
         if not self.client.user_is_privileged(message["sender_id"]):
             return Response.privilege_err(message)
@@ -323,13 +335,13 @@ class Group(PluginCommandMixin, PluginProcess):
         if result["result"] != "success":
             return Response.none()
 
-        # Insert the id of the bot's message into the database.
+        # Insert the id of the bots message into the database.
         try:
             self._db.execute(self._claim_all_sql, result["id"], commit=True)
         except Exception as e:
             return Response.build_message(message, str(e))
 
-        # Get all the currently existant emojis.
+        # Get all the currently existing emojis.
         result_sql: list[tuple[Any, ...]] = self._db.execute(self._get_all_emojis_sql)
         if not result_sql:
             return Response.none()
@@ -696,15 +708,64 @@ class Group(PluginCommandMixin, PluginProcess):
         return Response.ok(message)
 
     def _unsubscribe(
-        self, user_id: int, group_id: str, message: dict[str, Any] | None = None
+        self,
+        user_id: int,
+        group_id: str,
+        message: dict[str, Any] | None = None,
+        real: bool = False,
     ) -> Response | Iterable[Response]:
-        """Unsubscribe a user from a group."""
+        """Unsubscribe a user from a group.
+
+        If `real` is True, also unsubscribe the user from all streams
+        belonging to this group (which do not belong to another stream
+        group the user is subscribed to).
+        """
         self._db.execute(self._unsubscribe_user_sql, user_id, group_id, commit=True)
-        if message is not None:
-            return Response.ok(message)
-        return Response.build_message(
-            message=None,
-            content=f"Unsubscribed from group {group_id}.",
-            msg_type="private",
-            to=[user_id],
+
+        if not real:
+            if message is not None:
+                return Response.ok(message)
+            return Response.build_message(
+                message=None,
+                content=f"Unsubscribed from group {group_id}.",
+                msg_type="private",
+                to=[user_id],
+            )
+
+        # Get the streams of the group we want to unsubscribe from.
+        stream_regs_group: list[str] = self._get_stream_regs_from_group_id(group_id)
+        streams_group: set[str] = set(
+            stream
+            for stream_reg in stream_regs_group
+            for stream in self.client.get_streams_from_regex(stream_reg)
         )
+        # Get the streams of all the other groups this user might be subscribed to.
+        stream_regs: list[tuple[Any, ...]] = self._db.execute(
+            self._get_streams_from_user_sql, user_id
+        )
+        streams: set[str] = set(
+            stream
+            for (stream_reg,) in stream_regs
+            for stream in self.client.get_streams_from_regex(stream_reg)
+        )
+        unsubscribe_streams: list[str] = list(streams_group - streams)
+        # Make sure we do not unsubscribe from a stream which belongs to another
+        # group the user is subscribed to.
+        result: dict[str, Any] = self.client.remove_subscriptions(
+            streams=unsubscribe_streams, principals=[user_id]
+        )
+        msg: str
+        if result["result"] != "success":
+            msg = f"failed to unsubscribe from {unsubscribe_streams}: {result}"
+        else:
+            msg = f"unsubscribed from {unsubscribe_streams}"
+
+        if message is not None:
+            return Response.build_message(message=message, content=msg)
+        else:
+            return Response.build_message(
+                message=None,
+                content=msg,
+                msg_type="private",
+                to=[user_id],
+            )
