@@ -501,13 +501,13 @@ class Group(PluginCommandMixin, PluginProcess):
         message: dict[str, Any],
         group_id: str,
     ) -> Response | Iterable[Response]:
-        failed: list[str] = self._subscribe_users_to_stream_regexes(
+        err_msgs: list[str] = self._subscribe_users_to_stream_regexes(
             self._get_group_subscribers([group_id]),
             self._get_stream_regs_from_group_id(group_id),
         )
-        if failed:
+        if err_msgs:
             return Response.build_message(
-                message, f"failed for the following streams: {failed}"
+                message, f"failed for some/all streams: {err_msgs}"
             )
         return Response.ok(message)
 
@@ -650,11 +650,11 @@ class Group(PluginCommandMixin, PluginProcess):
                 message=None, content=msg, msg_type="private", to=[user_id]
             )
 
-        no_success: list[str] = self._subscribe_users_to_stream_regexes(
+        err_msgs: list[str] = self._subscribe_users_to_stream_regexes(
             [user_id], self._get_stream_regs_from_group_id(group_id)
         )
 
-        if not no_success:
+        if not err_msgs:
             if message is not None:
                 return Response.ok(message)
             return Response.build_message(
@@ -664,7 +664,7 @@ class Group(PluginCommandMixin, PluginProcess):
                 to=[user_id],
             )
 
-        msg = f"Failed to subscribe you to the following streams: {no_success}."
+        msg = f"Failed to subscribe you to some/all streams: {err_msgs}."
 
         if message is not None:
             return Response.build_message(message, msg)
@@ -678,17 +678,23 @@ class Group(PluginCommandMixin, PluginProcess):
     ) -> list[str]:
         """Subscribe the given group to all streams matching the regexes.
 
-        Return a list of streams to which the users could not be
-        subscribed.
+        Return a list of error messages which occurred during
+        subscription.
         """
-        no_success: list[str] = []
+        err_msgs: list[str] = []
 
         for stream_reg in stream_regs:
-            for stream in self.client.get_streams_from_regex(stream_reg):
-                if not self.client.subscribe_users(user_ids, stream):
-                    no_success.append(stream)
+            ret: tuple[bool, str | None] = self.client.subscribe_users_multiple_streams(
+                user_ids=user_ids,
+                streams=[
+                    (name, None)
+                    for name in self.client.get_streams_from_regex(stream_reg)
+                ],
+            )
+            if not ret[0]:
+                err_msgs.append(cast(str, ret[1]))
 
-        return no_success
+        return err_msgs
 
     def _unannounce(
         self, message: dict[str, Any], message_id: str
