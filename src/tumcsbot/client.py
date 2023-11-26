@@ -211,6 +211,10 @@ class Client(ZulipClient):
 
         return None
 
+    def get_user_ids_from_active_status(self, active: bool = True) -> list[int] | None:
+        """Get all user ids which are (de)activated."""
+        return self.get_user_ids_from_attribute("is_active", [active])
+
     def get_user_ids_from_attribute(
         self, attribute: str, values: Iterable[Any], case_sensitive: bool = True
     ) -> list[int] | None:
@@ -218,7 +222,7 @@ class Client(ZulipClient):
 
         Get and return a list of user ids of all users whose profiles
         contain the attribute "attribute" with a value present in
-        "values.
+        "values".
         If case_sensitive is set to False, the values will be
         interpreted as strings and compared case insensitively.
         Return None on error.
@@ -379,6 +383,7 @@ class Client(ZulipClient):
         stream_name: str,
         description: str | None = None,
         allow_private_streams: bool = False,
+        filter_active: bool = True,
     ) -> bool:
         """Subscribe a list of user ids to a public stream.
 
@@ -388,6 +393,12 @@ class Client(ZulipClient):
         stream_name   The name of the stream to subscribe to.
         description   An optional description to be used to
                       create the stream first.
+        allow_private_streams
+                      Allow subscription to private streams.
+        filter_active
+                      Remove non-active users from the request.
+                      Users are not active when they are deactivated
+                      or deleted.
 
         Return true on success or false otherwise.
         """
@@ -396,6 +407,13 @@ class Client(ZulipClient):
 
         if not allow_private_streams and self.private_stream_exists(stream_name):
             return False
+
+        if filter_active:
+            active_user_ids: list[int] | None = self.get_user_ids_from_active_status()
+            if active_user_ids is None:
+                logging.error("cannot retrieve active user ids.")
+                return False
+            user_ids = list(set(user_ids) & set(active_user_ids))
 
         subscription: dict[str, str] = {"name": stream_name}
         if description is not None:
@@ -681,6 +699,10 @@ class SharedClient:
         return self._client.get_streams_from_regex(regex)
 
     @synchronized(_shared_client_lock)
+    def get_user_ids_from_active_status(self, active: bool = True) -> list[int] | None:
+        return self._client.get_user_ids_from_active_status(active=active)
+
+    @synchronized(_shared_client_lock)
     def get_user_ids_from_attribute(
         self, attribute: str, values: Iterable[Any], case_sensitive: bool = True
     ) -> list[int] | None:
@@ -740,12 +762,14 @@ class SharedClient:
         stream_name: str,
         description: str | None = None,
         allow_private_streams: bool = False,
+        filter_active: bool = True,
     ) -> bool:
         return self._client.subscribe_users(
             user_ids=user_ids,
             stream_name=stream_name,
             description=description,
             allow_private_streams=allow_private_streams,
+            filter_active=filter_active,
         )
 
     @synchronized(_shared_client_lock)

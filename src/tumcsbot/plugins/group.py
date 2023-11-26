@@ -359,7 +359,7 @@ class Group(PluginCommandMixin, PluginProcess):
                     )
                 ),
                 lambda msg: self.client.send_response(
-                    Response.build_reaction(msg, cast(str, emoji))
+                    Response.build_reaction(msg, emoji)
                 ),
             ]
         )
@@ -378,7 +378,7 @@ class Group(PluginCommandMixin, PluginProcess):
             [
                 lambda msg: msg.update(content=pattern.sub("\n", msg["content"])),
                 lambda msg: self.client.remove_reaction(
-                    {"message_id": msg["id"], "emoji_name": cast(str, emoji)}
+                    {"message_id": msg["id"], "emoji_name": emoji}
                 ),
             ]
         )
