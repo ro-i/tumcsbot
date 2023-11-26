@@ -402,22 +402,68 @@ class Client(ZulipClient):
 
         Return true on success or false otherwise.
         """
-        chunk_size: int = 100
-        success: bool = True
+        return self.subscribe_users_multiple_streams(
+            user_ids=user_ids,
+            streams=[(stream_name, description)],
+            allow_private_streams=allow_private_streams,
+            filter_active=filter_active,
+        )[0]
 
-        if not allow_private_streams and self.private_stream_exists(stream_name):
-            return False
+    def subscribe_users_multiple_streams(
+        self,
+        user_ids: list[int],
+        streams: list[tuple[str, str | None]],
+        allow_private_streams: bool = False,
+        filter_active: bool = True,
+    ) -> tuple[bool, str | None]:
+        """Subscribe a list of user ids to a list of public streams.
+
+        Arguments:
+        ----------
+        user_ids      The list of user ids to subscribe.
+        streams       A list of (stream name, stream description) tuples
+                      denoting the streams to subscribe the given users
+                      to. The strams will be created first in case they
+                      don't exist. The stream description can be None.
+        allow_private_streams
+                      Allow subscription to private streams.
+                      If false, every private stream in `streams` will
+                      not be used for subscribing.
+        filter_active
+                      Remove non-active users from the request.
+                      Users are not active when they are deactivated
+                      or deleted.
+
+        Return (True, None) on success or (False, error message)
+        otherwise.
+        """
+        chunk_size: int = 100
+
+        if not allow_private_streams:
+            streams = [
+                (name, description)
+                for name, description in streams
+                if not self.private_stream_exists(name)
+            ]
+            if not streams:
+                return (True, None)
 
         if filter_active:
             active_user_ids: list[int] | None = self.get_user_ids_from_active_status()
             if active_user_ids is None:
-                logging.error("cannot retrieve active user ids.")
-                return False
+                logging.error("cannot retrieve active user ids")
+                return (False, "cannot retrieve active user ids")
             user_ids = list(set(user_ids) & set(active_user_ids))
 
-        subscription: dict[str, str] = {"name": stream_name}
-        if description is not None:
-            subscription.update(description=description)
+        subscriptions: list[dict[str, str]] = [
+            {"name": name}
+            if description is None
+            else {"name": name, "description": description}
+            for name, description in streams
+        ]
+
+        success: bool = True
+        errs: list[str] = []
 
         for i in range(0, len(user_ids), chunk_size):
             # (a too large index will be automatically reduced to len())
@@ -425,18 +471,23 @@ class Client(ZulipClient):
 
             while True:
                 result: dict[str, Any] = self.add_subscriptions(
-                    streams=[subscription], principals=user_id_chunk
+                    streams=subscriptions, principals=user_id_chunk
                 )
                 if result["result"] == "success":
                     break
                 if result["code"] == "UNAUTHORIZED_PRINCIPAL" and "principal" in result:
                     user_id_chunk.remove(result["principal"])
                     continue
-                logging.warning(str(result))
                 success = False
+                err: str = str(result)
+                logging.warning(err)
+                errs.append(err)
                 break
 
-        return success
+        return (
+            success,
+            None if success else ("the following errors occurred: " + ",".join(errs)),
+        )
 
     def user_is_privileged(self, user_id: int, allow_moderator: bool = False) -> bool:
         """Check whether a user is allowed to perform privileged commands.
@@ -776,6 +827,21 @@ class SharedClient:
             user_ids=user_ids,
             stream_name=stream_name,
             description=description,
+            allow_private_streams=allow_private_streams,
+            filter_active=filter_active,
+        )
+
+    @synchronized(_shared_client_lock)
+    def subscribe_users_multiple_streams(
+        self,
+        user_ids: list[int],
+        streams: list[tuple[str, str | None]],
+        allow_private_streams: bool = False,
+        filter_active: bool = True,
+    ) -> tuple[bool, str | None]:
+        return self._client.subscribe_users_multiple_streams(
+            user_ids=user_ids,
+            streams=streams,
             allow_private_streams=allow_private_streams,
             filter_active=filter_active,
         )
