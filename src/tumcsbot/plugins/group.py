@@ -18,7 +18,7 @@ class Group(PluginCommandMixin, PluginProcess):
     syntax = cleandoc(
         """
         group subscribe <group_id>
-          or group unsubscribe [-s] <group_id>
+          or group unsubscribe [-s | -w] <group_id>
           or group add <group_id> <emoji>
           or group remove <group_id>
           or group add_streams <group_id> <stream_pattern>...
@@ -27,7 +27,7 @@ class Group(PluginCommandMixin, PluginProcess):
           or group claim <group_id>
           or group claim_message <group_id> <message_id>
           or group unclaim <group_id> <message_id>
-          or group announce
+          or group announce [-u]
           or group unannounce <message_id>
           or group fix <group_id>
           or group fix_all
@@ -45,6 +45,11 @@ class Group(PluginCommandMixin, PluginProcess):
         from all the streams belonging to this group as long as they \
         do not also belong to another group you are subscribed to. \
         (It's not an `s`. On my world it means "streams".)
+        if you use the `-w` switch for `group unsubscribe`, you will \
+        only unsubscribe from the group, but keep the streams of this \
+        group you are currently subscribed to.
+        **The default behavior** for `group unsubscribe` (so without \
+        any flags) is equivalent to the `-s` option.
 
         Create/remove a stream group with `group add`/`group remove` by \
         specifing an identifier and an emoji. Note that removing a stream \
@@ -64,7 +69,9 @@ class Group(PluginCommandMixin, PluginProcess):
         also contain arbitrary other text.
         `group announce` triggers a message from the bot \
         which will be "special" for all groups and in which the bot \
-        will maintain a list of all groups.
+        will maintain a list of all groups. If used with the `-u` \
+        switch, all existing announcement messages messages will be \
+        updated to the current announcement message template.
         `group fix` makes sure that every subscriber of the given group \
         is subscribed to all streams of this group. This command is \
         intended to fix situations where the usual mechanism failed for \
@@ -86,8 +93,7 @@ class Group(PluginCommandMixin, PluginProcess):
         will be kept updated when new streams are added to the group.
         Just react to this message with the emoji of the stream group \
         you like to subscribe to. Remove your emoji to unsubscribe \
-        from this group. (Note that this will not unsubscribe you from \
-        the streams of this group.)
+        from this group. (1)
 
         stream group | emoji
         ------------ | -----
@@ -99,6 +105,12 @@ class Group(PluginCommandMixin, PluginProcess):
         - `group unsubscribe <group_id>`
 
         Have a nice day! :sunglasses:
+
+        (1) Note that this will also unsubscribe you from the existing \
+        streams of this group. If you only want to cancel the \
+        subscription without being unsubscribed from existing streams, \
+        just write me a PM:
+        - `group unsubscribe -w <group_id>`
         """
     )
     _announcement_msg_table_row_fmt: str = "%s | :%s:"
@@ -166,7 +178,7 @@ class Group(PluginCommandMixin, PluginProcess):
         self.command_parser = CommandParser()
         self.command_parser.add_subcommand("subscribe", args={"group_id": str})
         self.command_parser.add_subcommand(
-            "unsubscribe", opts={"s": None}, args={"group_id": str}
+            "unsubscribe", opts={"s": None, "w": None}, args={"group_id": str}
         )
         self.command_parser.add_subcommand(
             "add", args={"group_id": str, "emoji": Regex.get_emoji_name}
@@ -186,7 +198,7 @@ class Group(PluginCommandMixin, PluginProcess):
         self.command_parser.add_subcommand(
             "unclaim", args={"group_id": str, "message_id": int}
         )
-        self.command_parser.add_subcommand("announce")
+        self.command_parser.add_subcommand("announce", opts={"u": None})
         self.command_parser.add_subcommand("unannounce", args={"message_id": int})
         self.command_parser.add_subcommand("fix", args={"group_id": str})
         self.command_parser.add_subcommand("fix_all")
@@ -218,8 +230,14 @@ class Group(PluginCommandMixin, PluginProcess):
         if command == "subscribe":
             return self._subscribe(message["sender_id"], args.group_id, message)
         if command == "unsubscribe":
+            if opts.s and opts.w:
+                return Response.build_message(
+                    message,
+                    "The `-s` and `-w` flags are mutually exclusive, see `help group`.",
+                )
+            with_streams: bool = opts.s or not opts.w
             return self._unsubscribe(
-                message["sender_id"], args.group_id, message, opts.s
+                message["sender_id"], args.group_id, message, with_streams
             )
 
         if not self.client.user_is_privileged(message["sender_id"]):
@@ -228,6 +246,8 @@ class Group(PluginCommandMixin, PluginProcess):
         if command == "list":
             return self._list(message)
         if command == "announce":
+            if opts.u:
+                return self._update_announcement_messages(message)
             if message["type"] != "stream":
                 return Response.build_message(message, "Claim only stream messages.")
             return self._announce(message)
@@ -270,7 +290,9 @@ class Group(PluginCommandMixin, PluginProcess):
         if event["op"] == "add":
             return self._subscribe(event["user_id"], group_id)
         if event["op"] == "remove":
-            return self._unsubscribe(event["user_id"], group_id)
+            return self._unsubscribe(
+                event["user_id"], group_id, message=None, with_streams=True
+            )
 
         return Response.none()
 
@@ -321,17 +343,14 @@ class Group(PluginCommandMixin, PluginProcess):
         return Response.ok(message)
 
     def _announce(self, message: dict[str, Any]) -> Response | Iterable[Response]:
-        table: str = "\n".join(
-            self._announcement_msg_table_row_fmt % (group_id, emoji)
-            for group_id, emoji, _ in self._db.execute(self._list_sql)
-        )
+        announcement_msg: str = self._build_announcement_message()
 
         # Remove the requesting message.
         self.client.delete_message(message["id"])
 
         # Send own message.
         result: dict[str, Any] = self.client.send_response(
-            Response.build_message(message, self._announcement_msg.format(table))
+            Response.build_message(message, announcement_msg)
         )
         if result["result"] != "success":
             return Response.none()
@@ -395,6 +414,15 @@ class Group(PluginCommandMixin, PluginProcess):
                 ),
             ]
         )
+
+    def _build_announcement_message(self) -> str:
+        table: str = "\n".join(
+            self._announcement_msg_table_row_fmt % (group_id, emoji)
+            for group_id, emoji, _ in self._db.execute(self._list_sql)
+        )
+
+        # Send own message.
+        return self._announcement_msg.format(table)
 
     def _change_streams(
         self,
@@ -759,9 +787,9 @@ class Group(PluginCommandMixin, PluginProcess):
         )
         msg: str
         if result["result"] != "success":
-            msg = f"failed to unsubscribe from {unsubscribe_streams}: {result}"
+            msg = f"Unsubscribed from group {group_id}. Failed to unsubscribe from stream(s): {unsubscribe_streams}: {result}"
         else:
-            msg = f"unsubscribed from {unsubscribe_streams}"
+            msg = f"Unsubscribed from group {group_id}. Unsubscribed from stream(s): {unsubscribe_streams}"
 
         if message is not None:
             return Response.build_message(message=message, content=msg)
@@ -772,3 +800,16 @@ class Group(PluginCommandMixin, PluginProcess):
                 msg_type="private",
                 to=[user_id],
             )
+
+    def _update_announcement_messages(
+        self, message: dict[str, Any]
+    ) -> Response | Iterable[Response]:
+        """Update the content of all announcement messages."""
+
+        def update(msg: dict[str, Any]) -> None:
+            msg["content"] = self._build_announcement_message()
+
+        if self._do_for_all_announcement_messages([update]):
+            return Response.ok(message)
+
+        return Response.build_message(message, "failed, see logs / `logfile`")
