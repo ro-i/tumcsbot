@@ -100,5 +100,11 @@ additional `make` targets
 model
 -----
 
-![class diagram](./class_diagram.svg?)
+Note that the `tumcsbot.client.Client` class inherits from the original
+`zulip.Client`, which has been left out of the class diagram for the sake of
+simplicity.
+
+![packages](./packages.svg?)
+
+![classes](./classes.svg?)
 
