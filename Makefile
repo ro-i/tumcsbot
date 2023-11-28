@@ -12,6 +12,10 @@ args =
 run:
 	@bash -- manage.sh -v run '$(dest_dir)' $(args)
 
+.PHONY: class_diagram
+class_diagram:
+	pyreverse --colorized -f ALL -S -my --ignore plugins src/tumcsbot -o svg
+
 # run bot in debug mode
 .PHONY: debug
 debug: args = --debug
