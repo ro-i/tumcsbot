@@ -164,7 +164,7 @@ class Client(ZulipClient):
 
     def get_raw_message(
         self, message_id: int, apply_markdown: bool = True
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Adapt original code and add apply_markdown."""
         return self.call_endpoint(
             url=f"messages/{message_id}",
@@ -671,6 +671,9 @@ class SharedClient:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._client: Client = Client(*args, **kwargs)
+        # Replace the db connection of the client so it doesn't check for
+        # thread-safety since we're already guaranteeing that.
+        self._client._db = DB(check_same_thread=False)
 
     @property
     def base_url(self) -> str:
@@ -732,7 +735,7 @@ class SharedClient:
     @synchronized(_shared_client_lock)
     def get_raw_message(
         self, message_id: int, apply_markdown: bool = True
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         return self._client.get_raw_message(
             message_id=message_id, apply_markdown=apply_markdown
         )
