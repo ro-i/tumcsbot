@@ -788,6 +788,15 @@ class Response:
         Sorry, {}, an error occurred while executing your request.
         """
     )
+    request_msg: str = cleandoc(
+        """
+        Hi {}!
+        Your input would lead to the execution of the following command.
+        Do you want to execute this? If yes, please react with :check: to this message.
+        original_message_id: {}
+        command: {}
+        """
+    )
     greet_msg: str = "Hi {}! :-)"
     ok_emoji: str = "ok"
     no_emoji: str = "cross_mark"
@@ -889,6 +898,21 @@ class Response:
         emoji        The emoji to react with.
         """
         return cls(MessageType.EMOJI, {"message_id": message_id, "emoji_name": emoji})
+
+    @classmethod
+    def build_request_msg(cls, message: dict[str, Any], command: str) -> "Response":
+        """Build a message requesting whether the user wants to execute a given command.
+
+        Arguments:
+        ----------
+        message     The message sent by the user.
+        command     The command that would have been executed, given
+                    the message.
+        """
+        return cls.build_message(
+            message,
+            cls.request_msg.format(message["sender_full_name"], message["id"], command),
+        )
 
     @classmethod
     def privilege_err(cls, message: dict[str, Any]) -> "Response":
